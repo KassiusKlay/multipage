@@ -217,7 +217,7 @@ def show_patologista_plot(df):
         st.altair_chart(line, use_container_width=True)
 
 
-def show_tempo_de_resposta(df):
+def show_tempo_de_resposta_geral(df):
     df = df.loc[
             ~df.tipo_exame.str.contains('Aditamento')
             & ~df.tipo_exame.str.contains('Tipagem')
@@ -231,13 +231,16 @@ def show_tempo_de_resposta(df):
                 ]))
             ]
 
-    st.title('Tempo de Resposta')
+    df = df.groupby(['patologista', 'exame']).agg({
+            'tempo_de_resposta': 'mean'}).reset_index()
 
-    df = df.groupby([
-        pd.Grouper(key='expedido', freq='M'),
-        'patologista', 'exame']).agg({
-            'nr_exame': 'count', 'tempo_de_resposta': 'mean'}).reset_index()
-
+    with st.expander('Método'):
+        st.markdown('''
+        - Media do tempo de resposta (data expedido - data entrada)
+        - Dados desde 2019
+        - Exclui Autopsias, Aditamentos e Tipagens
+        - Exclui Patologistas do HBA e do Servico de Hematologia
+        ''')
     for i in ('Histologia', 'Citologia'):
         st.subheader(i)
         bar = alt.Chart(df).mark_bar(
@@ -251,36 +254,106 @@ def show_tempo_de_resposta(df):
 
         st.altair_chart(bar, use_container_width=True)
 
-    patologista = st.multiselect(
-            '', df.patologista.sort_values().unique(),
-            key='tempo_de_resposta_multi')
 
+def show_tempo_de_resposta_patologista(df):
+    df = df.loc[
+            ~df.tipo_exame.str.contains('Aditamento')
+            & ~df.tipo_exame.str.contains('Tipagem')
+            & ~df.tipo_exame.str.contains('Aut')
+            & ~(df.patologista.isin([
+                'Dra. Helena Oliveira',
+                'Dra. Rosa Madureira',
+                'Dr. Paulo Bernardo',
+                'Prof. António Medina de Almeida',
+                'Dra. Maria Delfina Brito',
+                ]))]
+
+    patologista = st.selectbox(
+            'Seleccione um Patologista', df.patologista.sort_values().unique())
+    anual = st.checkbox('Anual', key='tempo_de_resposta_anual')
+    if anual:
+        freq = 'Y'
+        x_axis = 'year(expedido):T'
+        tick_count = 'year'
+    else:
+        freq = 'M'
+        x_axis = 'yearmonth(expedido):T'
+        tick_count = {"interval": "month", "step": 6}
+
+    df = df.groupby([
+        pd.Grouper(key='expedido', freq=freq), 'patologista', 'exame'
+        ]).agg({
+            'tempo_de_resposta': 'mean'}).reset_index()
     if patologista:
-        df = df[df.patologista.isin(patologista)]
-        anual = st.checkbox('Anual', key='tempo_de_resposta_anual')
-        if anual:
-            x_axis = 'year(expedido):T'
-            tick_count = 'year'
-        else:
-            x_axis = 'yearmonth(expedido):T'
-            tick_count = {"interval": "month", "step": 3}
+        df = df[df.patologista == patologista]
 
-        for i in ('Histologia', 'Citologia'):
-            st.subheader(i)
-            line = alt.Chart(df.reset_index()).mark_line(
-                    ).encode(
-                            x=alt.X(
-                                x_axis, axis=alt.Axis(tickCount=tick_count)),
-                            y='mean(tempo_de_resposta)',
-                            color=alt.Color('patologista', title=''),
-                            tooltip='mean(tempo_de_resposta)',
-                            ).configure_axis(
-                                    grid=False, title=''
-                                    ).configure_view(
-                                    strokeWidth=0).transform_filter(
-                                            (alt.datum.exame == i))
+        line = alt.Chart(df.reset_index()).mark_line().encode(
+                    x=alt.X(x_axis, axis=alt.Axis(tickCount=tick_count)),
+                    y='mean(tempo_de_resposta)',
+                    color='exame',
+                    tooltip='mean(tempo_de_resposta)',
+                    )
+        rule = alt.Chart(df.reset_index()).mark_rule(
+                strokeDash=[12, 6], size=2).encode(
+                y='average(tempo_de_resposta)',
+                color='exame',
+                size=alt.value(2))
 
-            st.altair_chart(line, use_container_width=True)
+        layer = alt.layer(line + rule).encode(
+                color=alt.Color(title='')).configure_axis(
+                grid=False, title='').configure_view(strokeWidth=0)
+
+        st.altair_chart(layer, use_container_width=True)
+
+
+def show_exames_media_mensal(df):
+    excluir_hba = st.checkbox('Excluir HBA', key='imuno_hba')
+    if excluir_hba:
+        df = df[~df.tipo_exame.str.contains('hba', case=False)]
+    df = df.groupby([
+        pd.Grouper(key='expedido', freq='M'),
+        'patologista', 'exame']).agg({
+            'nr_exame': 'count',
+            'imuno': 'sum'})
+
+    imuno = df.groupby(['expedido', 'patologista']).agg({'imuno': 'sum'})
+    imuno['exame'] = 'Imuno'
+    imuno.columns = ['nr_exame', 'exame']
+
+    df = pd.concat([
+        df.reset_index(), imuno.reset_index()
+        ]).drop(columns='imuno')
+
+    total = df.groupby(['expedido', 'exame']).agg({'nr_exame': 'sum'})
+    total['patologista'] = 'Total'
+    df = pd.concat([df, total.reset_index()])
+
+    for i in ('Histologia', 'Citologia', 'Imuno'):
+        st.subheader(i)
+        bar = alt.Chart(df).mark_bar(
+                ).encode(
+                        x=alt.X('mean(nr_exame)', axis=None),
+                        y=alt.Y('patologista', sort='-x'),
+                        color=alt.condition(
+                            alt.datum.patologista == 'Total',
+                            alt.value("orange"),
+                            alt.value("steelblue")),
+                        tooltip='mean(nr_exame)',
+                        ).transform_filter(
+                                        (alt.datum.exame == i))
+
+        text = alt.Chart(df).mark_text(
+                align='left', color='black', dx=3).encode(
+                        text=alt.Text('mean(nr_exame)', format='.0f'),
+                        ).transform_filter((alt.datum.exame == i))
+
+
+        layer = alt.layer(bar + text).encode(
+                        x=alt.X('mean(nr_exame)', axis=alt.Axis(orient='top')),
+                        y=alt.Y('patologista', sort='-x'),
+                ).configure_axis(
+                grid=False, title='').configure_view(strokeWidth=0)
+        st.altair_chart(layer, use_container_width=True)
 
 
 def main_page():
@@ -293,11 +366,23 @@ def main_page():
             ~df.exame.str.contains('citologia', case=False), 'Histologia')
     df['tempo_de_resposta'] = (df.expedido - df.entrada).apply(
             lambda x: x.days)
-    show_total_plot(df)
-    show_tipo_de_exame_plot(df)
-    show_imuno_plot(df)
-    show_patologista_plot(df)
-    show_tempo_de_resposta(df)
+    options = [
+            'Tempo de Resposta (Geral)',
+            'Tempo de Resposta (Patologista)',
+            'Exames (Media Mensal)'
+            ]
+    selection = st.selectbox('', options)
+    if selection == options[0]:
+        show_tempo_de_resposta_geral(df)
+    elif selection == options[1]:
+        show_tempo_de_resposta_patologista(df)
+    elif selection == options[2]:
+        show_exames_media_mensal(df)
+    # show_total_plot(df)
+    # show_tipo_de_exame_plot(df)
+    # show_imuno_plot(df)
+    # show_patologista_plot(df)
+    # show_tempo_de_resposta(df)
 
 
 def upload_files():
@@ -316,15 +401,14 @@ def upload_files():
                     or (len(file_df.columns) != 12):
                 st.error(f'Ficheiro errado: {file.name}')
                 st.stop()
-            file_df.drop(columns=['Paciente', 'Cód. Facturação'], inplace=True)
+            file_df.drop(columns=[
+                'Paciente', 'Cód. Facturação', 'NHC', 'Episódio', 'Soarian'
+                ], inplace=True)
             file_df['unidade'] = unidade
             file_df.columns = df.columns
             file_df = file_df.replace('....', None).fillna(0)
-            file_df[[
-                'ano', 'nr_exame', 'nhc', 'episodio', 'soarian', 'imuno'
-                ]] = file_df[[
-                    'ano', 'nr_exame', 'nhc', 'episodio', 'soarian', 'imuno'
-                ]].astype(int)
+            file_df[['ano', 'nr_exame', 'imuno']] = file_df[[
+                    'ano', 'nr_exame', 'imuno']].astype(int)
             file_df[['entrada', 'expedido']] = file_df[[
                 'entrada', 'expedido']].apply(
                         pd.to_datetime, format='%d-%m-%Y')
