@@ -3,6 +3,8 @@ import pandas as pd
 from sqlalchemy import create_engine
 import altair as alt
 
+st.set_page_config(layout='centered')
+
 
 @st.experimental_singleton
 def init_engine():
