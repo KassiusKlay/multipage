@@ -329,31 +329,83 @@ def show_exames_media_mensal(df):
     df = pd.concat([df, total.reset_index()])
 
     for i in ('Histologia', 'Citologia', 'Imuno'):
-        st.subheader(i)
-        bar = alt.Chart(df).mark_bar(
+        first_domain = df.expedido.min() - pd.DateOffset(years=1)
+        last_domain = df.expedido.max() + pd.DateOffset(years=1)
+
+        selector = alt.selection_single(empty='none', fields=['patologista'])
+
+        bar = alt.Chart(df, title=f'{i}').mark_bar(
                 ).encode(
-                        x=alt.X('mean(nr_exame)', axis=None),
-                        y=alt.Y('patologista', sort='-x'),
+                        x=alt.X('mean(nr_exame)', axis=alt.Axis(
+                            orient='top', labels=False,
+                            ticks=False, title='Media de Casos por Mes')),
+                        y=alt.Y('patologista', sort='-x', title=''),
                         color=alt.condition(
-                            alt.datum.patologista == 'Total',
-                            alt.value("orange"),
-                            alt.value("steelblue")),
-                        tooltip='mean(nr_exame)',
-                        ).transform_filter(
-                                        (alt.datum.exame == i))
+                            selector,
+                            alt.value("steelblue"),
+                            alt.value("lightgrey")),
+                        )
 
         text = alt.Chart(df).mark_text(
                 align='left', color='black', dx=3).encode(
-                        text=alt.Text('mean(nr_exame)', format='.0f'),
-                        ).transform_filter((alt.datum.exame == i))
-
-
-        layer = alt.layer(bar + text).encode(
-                        x=alt.X('mean(nr_exame)', axis=alt.Axis(orient='top')),
+                        x='mean(nr_exame)',
                         y=alt.Y('patologista', sort='-x'),
-                ).configure_axis(
-                grid=False, title='').configure_view(strokeWidth=0)
-        st.altair_chart(layer, use_container_width=True)
+                        text=alt.Text(
+                            'mean(nr_exame)',
+                            format='.0f'),
+                        )
+
+        left = alt.layer(bar + text).add_selection(selector).transform_filter(
+                alt.datum.exame == i)
+
+        rule = alt.Chart(df).mark_rule(
+                strokeDash=[12, 6], size=2
+                ).encode(
+                        y=alt.Y(
+                            'mean(nr_exame)',
+                            ),
+                        color=alt.value('lightgrey'),
+                        size=alt.value(2))
+
+        text_rule = alt.Chart(df).mark_text(
+                color='lightgrey', dx=-180, dy=10, size=15
+                ).encode(
+                        y='mean(nr_exame)',
+                        text=alt.Text(
+                            'mean(nr_exame)',
+                            format='.0f'))
+
+        line = alt.Chart(df).mark_line(point=True).encode(
+                x=alt.X(
+                    'year(expedido):T',
+                    title='',
+                    scale=alt.Scale(domain=(first_domain, last_domain)),
+                    axis=alt.Axis(tickCount='year'),
+                    ),
+                y=alt.Y(
+                    'mean(nr_exame)',
+                    title='',
+                    ),
+                )
+
+        text_line = line.mark_text(
+                color='steelblue', dy=-10, size=15
+                ).encode(
+                text=alt.Text(
+                    'mean(nr_exame)',
+                    format='.0f'))
+
+        right = alt.layer(
+                rule + text_rule + line + text_line
+                ).transform_filter(
+                selector).transform_filter(alt.datum.exame == i)
+
+        chart = alt.hconcat(left, right).configure_axis(
+                grid=False).configure_view(
+                        strokeWidth=0).configure_title(
+                            anchor='start')
+
+        st.altair_chart(chart, use_container_width=True)
 
 
 def main_page():
@@ -371,7 +423,7 @@ def main_page():
             'Tempo de Resposta (Patologista)',
             'Exames (Media Mensal)'
             ]
-    selection = st.selectbox('', options)
+    selection = st.selectbox('', options, index=2)
     if selection == options[0]:
         show_tempo_de_resposta_geral(df)
     elif selection == options[1]:
@@ -418,6 +470,7 @@ def upload_files():
         st.success('Ficheiros Carregados')
 
 
+st.session_state.user = 'joaocassis'
 if 'user' not in st.session_state:
     login()
     st.stop()
