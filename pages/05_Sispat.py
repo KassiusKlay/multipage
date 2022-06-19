@@ -3,7 +3,7 @@ import pandas as pd
 from sqlalchemy import create_engine
 import altair as alt
 
-st.set_page_config(layout="centered")
+st.set_page_config(layout="wide")
 
 
 @st.experimental_singleton
@@ -19,7 +19,6 @@ def init_engine():
 
 
 engine = init_engine()
-interpolate = "step"
 
 
 def check_credentials():
@@ -50,404 +49,8 @@ def get_stored_data():
     )
 
 
-def show_geral_casos(df):
-    df = df.loc[
-        ~df.tipo_exame.str.contains("Aditamento")
-        & ~df.tipo_exame.str.contains("Tipagem")
-    ]
-    st.subheader("Total de Exames")
-    anual = st.checkbox("Anual", key="exame_anual")
-    if anual:
-        freq = "Y"
-        x_axis = "year(expedido):T"
-        tick_count = "year"
-        first_domain = df.expedido.min() - pd.DateOffset(years=1)
-        last_domain = df.expedido.max() + pd.DateOffset(months=1)
-    else:
-        freq = "M"
-        x_axis = "yearmonth(expedido):T"
-        tick_count = {"interval": "month", "step": 6}
-        first_domain = df.expedido.min() - pd.DateOffset(months=1)
-        last_domain = df.expedido.max() + pd.DateOffset(months=1)
-
-    df = df.groupby([pd.Grouper(key="expedido", freq=freq), "exame"]).agg(
-        {"nr_exame": "count", "imuno": "sum"}
-    )
-
-    imuno = df.groupby("expedido").agg({"imuno": "sum"})
-    imuno["exame"] = "Imuno"
-    imuno.columns = ["nr_exame", "exame"]
-
-    df = pd.concat([df.reset_index(), imuno.reset_index()]).drop(columns="imuno")
-
-    selection = alt.selection_multi(empty="all", fields=["exame"])
-    color = alt.condition(
-        selection, alt.Color("exame:N", legend=None), alt.value("lightgray")
-    )
-    opacity = alt.condition(selection, alt.value(1), alt.value(0.1))
-
-    line = (
-        alt.Chart(df)
-        .mark_line(point=True, interpolate=interpolate)
-        .encode(
-            x=alt.X(
-                x_axis,
-                axis=alt.Axis(tickCount=tick_count),
-                scale=alt.Scale(domain=(first_domain, last_domain)),
-            ),
-            y="nr_exame",
-            color=color,
-            tooltip="nr_exame",
-            opacity=opacity,
-        )
-    )
-
-    rule = (
-        alt.Chart(df)
-        .mark_rule(strokeDash=[12, 6], size=2)
-        .encode(
-            y=alt.Y(
-                "mean(nr_exame)",
-            ),
-            color=color,
-            size=alt.value(2),
-            opacity=opacity,
-        )
-    )
-
-    text_rule = (
-        alt.Chart(df)
-        .mark_text(
-            align="left",
-            baseline="bottom",
-            fontSize=14,
-            fontWeight=600,
-        )
-        .encode(
-            x=alt.value(1),
-            y="mean(nr_exame)",
-            color=color,
-            text=alt.Text("mean(nr_exame)", format=".0f"),
-            opacity=opacity,
-        )
-    )
-    right = (
-        alt.Chart(df)
-        .mark_point()
-        .encode(y=alt.Y("exame:N", axis=alt.Axis(orient="right")), color=color)
-        .add_selection(selection)
-    )
-
-    left = alt.layer(line + rule + text_rule)
-
-    chart = (
-        alt.hconcat(left, right)
-        .configure_axis(grid=False, title="")
-        .configure_view(strokeWidth=0)
-    )
-
-    st.altair_chart(chart, use_container_width=True)
-
-
-def show_geral_tipos_de_exame(df):
-    st.subheader("Tipo de Exame")
-    tipo_exame = st.selectbox("", df.tipo_exame.sort_values().unique().tolist())
-    df = df[df.tipo_exame == tipo_exame]
-    anual = st.checkbox("Anual", key="tipo_exame_anual")
-    if anual:
-        freq = "Y"
-        x_axis = "year(expedido):T"
-        tick_count = "year"
-        first_domain = df.expedido.min() - pd.DateOffset(years=1)
-        last_domain = df.expedido.max() + pd.DateOffset(months=1)
-    else:
-        freq = "M"
-        x_axis = "yearmonth(expedido):T"
-        tick_count = {"interval": "month", "step": 6}
-        first_domain = df.expedido.min() - pd.DateOffset(months=1)
-        last_domain = df.expedido.max() + pd.DateOffset(months=1)
-
-    df = (
-        df.groupby([pd.Grouper(key="expedido", freq=freq), "tipo_exame"])
-        .agg({"nr_exame": "count"})
-        .reset_index()
-    )
-
-    line = (
-        alt.Chart(df)
-        .mark_line(point=True, interpolate=interpolate)
-        .encode(
-            x=alt.X(
-                x_axis,
-                axis=alt.Axis(tickCount=tick_count),
-                scale=alt.Scale(domain=(first_domain, last_domain)),
-            ),
-            y="mean(nr_exame)",
-            tooltip="mean(nr_exame)",
-        )
-    )
-
-    rule = (
-        alt.Chart(df)
-        .mark_rule(strokeDash=[12, 6], size=2)
-        .encode(
-            y=alt.Y(
-                "mean(nr_exame)",
-            ),
-            color=alt.value("lightgrey"),
-            size=alt.value(2),
-        )
-    )
-
-    text_rule = (
-        alt.Chart(df)
-        .mark_text(
-            align="left",
-            baseline="bottom",
-            fontSize=14,
-            fontWeight=600,
-            color="lightgrey",
-        )
-        .encode(
-            x=alt.value(1),
-            y="mean(nr_exame)",
-            text=alt.Text("mean(nr_exame)", format=".0f"),
-        )
-    )
-
-    chart = (
-        alt.layer(line + rule + text_rule)
-        .configure_axis(grid=False, title="")
-        .configure_view(strokeWidth=0)
-    )
-
-    st.altair_chart(chart, use_container_width=True)
-
-
-def select_gerais(df):
-    option = st.radio("", ["Geral", "Por Patologista"], horizontal=True)
-    if option == "Por Patologista":
-        patologista = st.selectbox(
-            "Seleccione um patologista",
-            df.patologista.sort_values().unique(),
-            key="patologista",
-        )
-        df = df[df.patologista == patologista]
-    else:
-        excluir_hba = st.checkbox("Excluir HBA", key="imuno_hba")
-        if excluir_hba:
-            df = df[~df.tipo_exame.str.contains("hba", case=False)]
-    show_geral_casos(df)
-    show_geral_tipos_de_exame(df)
-
-
-def show_media_tempo_de_resposta(df):
-    df = df.loc[
-        ~df.tipo_exame.str.contains("Aditamento")
-        & ~df.tipo_exame.str.contains("Tipagem")
-        & ~df.tipo_exame.str.contains("Aut")
-        & ~(
-            df.patologista.isin(
-                [
-                    "Dra. Helena Oliveira",
-                    "Dra. Rosa Madureira",
-                    "Dr. Paulo Bernardo",
-                    "Prof. António Medina de Almeida",
-                    "Dra. Maria Delfina Brito",
-                ]
-            )
-        )
-        & ~(
-            (df.patologista == "Dra. Ana Catarino")
-            & (df.expedido.dt.to_period("M") == "2022-05")
-        )
-    ]
-
-    df = df.groupby([pd.Grouper(key="expedido", freq="M"), "patologista", "exame"]).agg(
-        {"tempo_de_resposta": "mean"}
-    )
-
-    total = df.groupby(["expedido", "exame"]).agg({"tempo_de_resposta": "mean"})
-    total["patologista"] = "Total"
-    df = pd.concat([df.reset_index(), total.reset_index()])
-    plot_media(
-        df,
-        ("Histologia", "Citologia"),
-        "mean(tempo_de_resposta)",
-        "patologista",
-        "x",
-        ".1f",
-    )
-
-
-def plot_media(df, exame_tuple, x, y, x_sort, text_format):
-    for i in exame_tuple:
-        first_domain = df.expedido.min() - pd.DateOffset(years=1)
-        last_domain = df.expedido.max() + pd.DateOffset(years=1)
-
-        selector = alt.selection_single(empty="none", fields=[y])
-
-        bar = (
-            alt.Chart(df, title=f"{i}")
-            .mark_bar()
-            .encode(
-                x=alt.X(x, axis=None),
-                y=alt.Y(y, sort=x_sort, title=""),
-                color=alt.condition(
-                    selector, alt.value("steelblue"), alt.value("lightgrey")
-                ),
-            )
-        )
-
-        text = (
-            alt.Chart(df)
-            .mark_text(align="left", color="black", dx=3)
-            .encode(
-                x=x,
-                y=alt.Y(y, sort=x_sort),
-                text=alt.Text(x, format=text_format),
-            )
-        )
-
-        left = (
-            alt.layer(bar + text)
-            .add_selection(selector)
-            .transform_filter(alt.datum.exame == i)
-        )
-
-        rule = (
-            alt.Chart(df)
-            .mark_rule(strokeDash=[12, 6], size=2)
-            .encode(
-                y=alt.Y(
-                    x,
-                ),
-                color=alt.value("lightgrey"),
-                size=alt.value(2),
-            )
-        )
-
-        text_rule = (
-            alt.Chart(df)
-            .mark_text(
-                align="left",
-                baseline="bottom",
-                fontSize=14,
-                fontWeight=600,
-                color="lightgrey",
-            )
-            .encode(
-                x=alt.value(1),
-                y=x,
-                text=alt.value(["Média"]),
-            )
-        )
-
-        line = (
-            alt.Chart(df)
-            .mark_line(point=True)
-            .encode(
-                x=alt.X(
-                    "year(expedido):T",
-                    title="",
-                    scale=alt.Scale(domain=(first_domain, last_domain)),
-                    axis=alt.Axis(tickCount="year"),
-                ),
-                y=alt.Y(
-                    x,
-                    title="",
-                ),
-            )
-        )
-
-        text_line = line.mark_text(color="steelblue", dy=-10, size=15).encode(
-            text=alt.Text(x, format=text_format)
-        )
-
-        right = (
-            alt.layer(rule + text_rule + line + text_line)
-            .transform_filter(selector)
-            .transform_filter(alt.datum.exame == i)
-        )
-
-        chart = (
-            alt.hconcat(left, right)
-            .configure_axis(grid=False)
-            .configure_view(strokeWidth=0)
-            .configure_title(anchor="start")
-        ).configure_title(fontSize=20, anchor="start")
-
-        st.altair_chart(chart, use_container_width=True)
-
-
-def show_media_casos(df):
-    df = df.loc[
-        ~df.tipo_exame.str.contains("Aditamento")
-        & ~df.tipo_exame.str.contains("Tipagem")
-    ]
-    excluir_hba = st.checkbox("Excluir HBA", key="imuno_hba")
-    if excluir_hba:
-        df = df[~df.tipo_exame.str.contains("hba", case=False)]
-    df = df.groupby([pd.Grouper(key="expedido", freq="M"), "patologista", "exame"]).agg(
-        {"nr_exame": "count", "imuno": "sum"}
-    )
-
-    imuno = df.groupby(["expedido", "patologista"]).agg({"imuno": "sum"})
-    imuno["exame"] = "Imuno"
-    imuno.columns = ["nr_exame", "exame"]
-
-    df = pd.concat([df.reset_index(), imuno.reset_index()]).drop(columns="imuno")
-
-    total = df.groupby(["expedido", "exame"]).agg({"nr_exame": "sum"})
-    total["patologista"] = "Total"
-    df = pd.concat([df, total.reset_index()])
-    plot_media(
-        df,
-        ("Histologia", "Citologia", "Imuno"),
-        "mean(nr_exame)",
-        "patologista",
-        "-x",
-        ".0f",
-    )
-
-
-def show_media_tipos_de_exame(df):
-    excluir_hba = st.checkbox("Excluir HBA", key="imuno_hba")
-    if excluir_hba:
-        df = df[~df.tipo_exame.str.contains("hba", case=False)]
-    df = (
-        df.groupby([pd.Grouper(key="expedido", freq="M"), "exame", "tipo_exame"])
-        .agg({"nr_exame": "count"})
-        .reset_index()
-    )
-
-    total = df.groupby(["expedido", "exame"]).agg({"nr_exame": "sum"})
-    total["tipo_exame"] = "Total"
-
-    df = pd.concat([df, total.reset_index()])
-
-    plot_media(
-        df, ("Histologia", "Citologia"), "mean(nr_exame)", "tipo_exame", "-x", ".0f"
-    )
-
-
-def select_medias(df):
-    option = st.radio(
-        "",
-        ["Casos por Mês", "Tipos de Exame por Mês", "Tempo de Resposta"],
-        horizontal=True,
-    )
-
-    if option == "Casos por Mês":
-        show_media_casos(df)
-    elif option == "Tipos de Exame por Mês":
-        show_media_tipos_de_exame(df)
-    elif option == "Tempo de Resposta":
-        show_media_tempo_de_resposta(df)
-
-
-def main_page():
-    df = get_stored_data()
+@st.experimental_memo
+def process_df(df):
     df["exame"] = df.tipo_exame.mask(
         (df.tipo_exame.str.contains("citologia", case=False))
         | (df.tipo_exame.str.contains("mielo", case=False)),
@@ -457,17 +60,254 @@ def main_page():
         ~df.exame.str.contains("citologia", case=False), "Histologia"
     )
     df["tempo_de_resposta"] = (df.expedido - df.entrada).apply(lambda x: x.days)
-    options = [
-        "Gerais",
-        "Médias",
-    ]
 
-    selection = st.selectbox("", options, index=0)
+    df = (
+        df.groupby(
+            [pd.Grouper(key="expedido", freq="M"), "exame", "tipo_exame", "patologista"]
+        )
+        .agg({"nr_exame": "count", "imuno": "sum", "tempo_de_resposta": "mean"})
+        .reset_index()
+    )
+    return df
 
-    if selection == options[0]:
-        select_gerais(df)
-    elif selection == options[1]:
-        select_medias(df)
+
+def plot_line(df, plot_selection):
+
+    if plot_selection == "Total Mensal":
+        freq = "M"
+        aggregate = {"nr_exame": "sum"}
+        x_axis = "yearmonth(expedido):T"
+        y_axis = "nr_exame"
+        y_axis_mean = "mean(nr_exame)"
+        text_format = ".0f"
+        tick_count = {"interval": "month", "step": 6}
+
+    elif plot_selection == "Total Anual":
+        freq = "Y"
+        aggregate = {"nr_exame": "sum"}
+        x_axis = "year(expedido):T"
+        y_axis = "nr_exame"
+        y_axis_mean = "mean(nr_exame)"
+        text_format = ".0f"
+        tick_count = "year"
+
+    elif plot_selection == "Media Mensal / Ano":
+        freq = "M"
+        aggregate = {"nr_exame": "sum"}
+        x_axis = "year(expedido):T"
+        y_axis = y_axis_mean = "mean(nr_exame)"
+        text_format = ".0f"
+        tick_count = "year"
+
+    elif plot_selection == "Tempo de Resposta":
+        df = df[
+            ~(
+                (df.patologista == "Dra. Ana Catarino")
+                & (df.expedido.dt.to_period("M") == "2022-05")
+            )
+        ]
+        freq = "M"
+        aggregate = {"tempo_de_resposta": "mean"}
+        x_axis = "year(expedido):T"
+        y_axis = y_axis_mean = "mean(tempo_de_resposta)"
+        text_format = "0.1f"
+        tick_count = "year"
+
+    df = df.groupby(pd.Grouper(key="expedido", freq=freq)).agg(aggregate).reset_index()
+
+    line = (
+        alt.Chart()
+        .mark_line(point=True, interpolate="step")
+        .encode(
+            x=alt.X(
+                x_axis,
+                axis=alt.Axis(tickCount=tick_count),
+                scale=alt.Scale(padding=20),
+            ),
+            y=y_axis,
+            tooltip=alt.Text(y_axis, format=text_format),
+        )
+    )
+
+    rule = (
+        alt.Chart()
+        .mark_rule(strokeDash=[12, 6], size=2)
+        .encode(y=y_axis_mean, color=alt.value("lightgrey"), size=alt.value(2))
+    )
+
+    text_rule = (
+        alt.Chart()
+        .mark_text(align="left", color="lightgrey", dy=10)
+        .encode(
+            x=alt.value(1),
+            y=y_axis_mean,
+            text=alt.Text(y_axis_mean, format=text_format),
+            size=alt.value(15),
+        )
+    )
+    layer = (
+        alt.layer(rule + text_rule + line, data=df)
+        .configure_axis(grid=False, title="")
+        .configure_view(strokeWidth=0)
+        .properties(width=700)
+    )
+    st.altair_chart(layer)
+
+
+def plot_bar(df, plot_selection):
+
+    if "Tempo de Resposta" in plot_selection:
+        df = df[
+            ~df.tipo_exame.str.contains("Aditamento")
+            & ~df.tipo_exame.str.contains("Tipagem")
+            & ~df.tipo_exame.str.contains("Aut")
+            & ~(df.tipo_exame == "Caso de Consulta")
+            & ~(
+                (df.patologista == "Dra. Ana Catarino")
+                & (df.expedido.dt.to_period("M") == "2022-05")
+            )
+            & ~(
+                df.patologista.isin(
+                    [
+                        "Dra. Helena Oliveira",
+                        "Dr. Paulo Bernardo",
+                        "Prof. António Medina de Almeida",
+                    ]
+                )
+            )
+        ]
+        aggregate = {"tempo_de_resposta": "mean"}
+        patologista = "Media"
+        x_axis = "mean(tempo_de_resposta)"
+        sort = "x"
+        text_format = ".1f"
+        transform_filter = "datum.patologista != 'Dra. Helena Oliveira'"
+    elif "Media de Casos" in plot_selection:
+        aggregate = {"nr_exame": "sum"}
+        patologista = "Total"
+        x_axis = "mean(nr_exame)"
+        sort = "-x"
+        text_format = ".0f"
+        transform_filter = "datum.mean_nr_exame > 10"
+
+    start_year, end_year = st.select_slider(
+        "",
+        range(df.expedido.min().year, df.expedido.max().year + 1),
+        value=(df.expedido.min().year, df.expedido.max().year),
+    )
+
+    df = df[df.expedido.dt.year.between(start_year, end_year)]
+
+    df = df.groupby([pd.Grouper(key="expedido", freq="M"), "patologista"]).agg(
+        aggregate
+    )
+    total = df.groupby("expedido").agg(aggregate)
+    total["patologista"] = patologista
+    df = pd.concat([df.reset_index(), total.reset_index()])
+
+    bar = (
+        alt.Chart()
+        .mark_bar()
+        .encode(
+            x=alt.X(
+                x_axis,
+                axis=None,
+            ),
+            y=alt.Y("patologista", sort=sort),
+            color=alt.condition(
+                f"datum.patologista == '{patologista}'",
+                alt.value("orange"),
+                alt.value("steelblue"),
+            ),
+        )
+    )
+
+    text = (
+        alt.Chart()
+        .mark_text(align="left", dx=2)
+        .encode(
+            x=x_axis,
+            y=alt.Y("patologista", sort=sort),
+            text=alt.Text(x_axis, format=text_format),
+        )
+    )
+
+    chart = (
+        alt.layer(bar + text, data=df)
+        .configure_axis(grid=False, title="")
+        .configure_view(strokeWidth=0)
+        .properties(width=700)
+        .transform_joinaggregate(
+            mean_nr_exame="mean(nr_exame)", groupby=["patologista"]
+        )
+        .transform_filter(transform_filter)
+    )
+
+    st.altair_chart(chart)
+
+
+def main_page():
+    df = get_stored_data()
+    df = process_df(df)
+
+    lista_patologistas = df.patologista.sort_values().unique().tolist()
+    lista_patologistas.insert(0, "Todos")
+
+    cols = st.columns(3)
+
+    data_selection = cols[0].selectbox(
+        "", ["Histologia", "Citologia", "Imuno", "Comparativos"]
+    )
+    if data_selection in ["Histologia", "Citologia", "Imuno"]:
+        filter_patologista = cols[1].selectbox("", lista_patologistas, 0)
+        if filter_patologista != "Todos":
+            df = df[df.patologista == filter_patologista]
+        if data_selection in ["Histologia", "Citologia"]:
+            df = df[df.exame == data_selection]
+            lista_tipos_exame = df.tipo_exame.sort_values().unique().tolist()
+            lista_tipos_exame.insert(0, "Todos")
+            filter_tipo_exame = cols[2].selectbox("", lista_tipos_exame, 0)
+            if filter_tipo_exame != "Todos":
+                df = df[df.tipo_exame == filter_tipo_exame]
+            else:
+                df = df[
+                    ~df.tipo_exame.str.contains("Aditamento")
+                    & ~df.tipo_exame.str.contains("Tipagem")
+                    & ~df.tipo_exame.str.contains("Aut")
+                    & ~(df.tipo_exame == "Caso de Consulta")
+                ]
+        else:
+            df = df[["expedido", "imuno"]]
+            df.columns = ["expedido", "nr_exame"]
+        lista_graficos = ["Total Mensal", "Total Anual", "Media Mensal / Ano"]
+        if data_selection != "Imuno":
+            lista_graficos.insert(3, "Tempo de Resposta")
+    else:
+        df = df[
+            ~df.tipo_exame.str.contains("Aditamento")
+            & ~df.tipo_exame.str.contains("Tipagem")
+            & ~df.tipo_exame.str.contains("Aut")
+            & ~(df.tipo_exame == "Caso de Consulta")
+        ]
+        filter_exame = cols[1].selectbox("", ["Histologia", "Citologia", "Imuno"])
+        if filter_exame in ["Histologia", "Citologia"]:
+            df = df[df.exame == filter_exame]
+        else:
+            df = df[["expedido", "patologista", "imuno"]]
+            df.columns = ["expedido", "patologista", "nr_exame"]
+        lista_graficos = ["Media de Casos por Mes"]
+        if filter_exame != "Imuno":
+            lista_graficos.insert(1, "Tempo de Resposta")
+
+    excluir_hba = st.checkbox("Excluir HBA")
+    if excluir_hba:
+        df = df[~df.tipo_exame.str.contains("hba", case=False)]
+
+    plot_selection = st.radio("", lista_graficos, horizontal=True)
+    if data_selection == "Comparativos":
+        plot_bar(df, plot_selection)
+    else:
+        plot_line(df, plot_selection)
 
 
 def upload_files():
