@@ -1,6 +1,6 @@
 mkdir -p ~/.streamlit
 
-echo "
+printf "
 [server]
 headless = true
 port = $PORT
@@ -8,7 +8,7 @@ enableCORS = false
 " > ~/.streamlit/config.toml
 
 
-echo "
+printf "
 [postgres]
 host = $DB_HOST
 port = $DB_PORT
