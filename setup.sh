@@ -1,20 +1,18 @@
-mkdir -p ~/.streamlit/
+mkdir -p ~/.streamlit
 
 echo "
-[server]\n
-headless = true\n
-port = $PORT\n
-enableCORS = false\n
-\n
+[server]
+headless = true
+port = $PORT
+enableCORS = false
 " > ~/.streamlit/config.toml
 
 
 echo "
-[postgres]\n
-host = $DB_HOST\n
-port = $DB_PORT\n
-dbname = $DB_NAME\n
-user = $DB_USER\n
-password = $DB_PSWD\n
-\n
+[postgres]
+host = $DB_HOST
+port = $DB_PORT
+dbname = $DB_NAME
+user = $DB_USER
+password = $DB_PSWD
 " > ~/.streamlit/secrets.toml
