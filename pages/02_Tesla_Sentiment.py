@@ -27,9 +27,7 @@ def init_engine():
         DB_HOST = os.environ.get("DB_HOST")
         DB_PORT = os.environ.get("DB_PORT")
         DB_NAME = os.environ.get("DB_NAME")
-        create_engine(
-            f"postgresql://" f"{DB_USER}:{DB_PSWD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-        )
+        create_engine(f"postgresql://{DB_USER}:{DB_PSWD}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
 
 
 @st.experimental_memo
