@@ -3,6 +3,7 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 from sqlalchemy import create_engine
+import os
 
 st.set_page_config(layout="wide")
 
@@ -20,7 +21,7 @@ def init_engine():
             f'{st.secrets["postgres"]["port"]}/'
             f'{st.secrets["postgres"]["dbname"]}',
         )
-    except Exception:
+    except FileNotFoundError:
         DB_USER = os.environ.get("DB_USER")
         DB_PSWD = os.environ.get("DB_PSWD")
         DB_HOST = os.environ.get("DB_HOST")
