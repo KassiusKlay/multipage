@@ -13,7 +13,7 @@ START_DATE = "2010-01-01"
 @st.experimental_singleton
 def init_engine():
     try:
-        create_engine(
+        engine = create_engine(
             f"postgresql://"
             f'{st.secrets["postgres"]["user"]}:'
             f'{st.secrets["postgres"]["password"]}@'
@@ -27,7 +27,10 @@ def init_engine():
         DB_HOST = os.environ.get("DB_HOST")
         DB_PORT = os.environ.get("DB_PORT")
         DB_NAME = os.environ.get("DB_NAME")
-        create_engine(f"postgresql://{DB_USER}:{DB_PSWD}@{DB_HOST}:{DB_PORT}/{DB_NAME}")
+        engine = create_engine(
+            f"postgresql://{DB_USER}:{DB_PSWD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+        )
+    return engine
 
 
 @st.experimental_memo
