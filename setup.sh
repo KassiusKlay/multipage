@@ -8,11 +8,11 @@ enableCORS = false
 " > ~/.streamlit/config.toml
 
 
-#printf "
-#[postgres]
-#host = $DB_HOST
-#port = $DB_PORT
-#dbname = $DB_NAME
-#user = $DB_USER
-#password = $DB_PSWD
-#" > ~/.streamlit/secrets.toml
+printf "
+[postgres]
+host = $DB_HOST
+port = $DB_PORT
+dbname = $DB_NAME
+user = $DB_USER
+password = $DB_PSWD
+" > ~/.streamlit/secrets.toml
