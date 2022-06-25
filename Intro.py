@@ -1,10 +1,10 @@
 import streamlit as st
 
-st.title("Introdução")
+st.title("👋 Introdução")
 
 st.markdown(
     """
-        Bemvindo ao meu site de projectos em Python.\n
+        Bemvindo ao meu site de projectos em Python 🐍\n
         Desde 2018 que comecei a interessar-me por programação (entre outras coisas),\
         pelo que quando o [Streamlit](https://www.streamlit.io) finalmente \
         lancou as apps multipáginas, \
@@ -15,14 +15,14 @@ st.markdown(
     """
 )
 
-st.subheader("Stock Drop")
+st.subheader(" 📉 [Stock Drop](www.joaocassis.pt/Stock_Drop)")
 
 st.markdown(
     """
         Se investem em acções como eu, certamente já passaram por períodos de maior\
                 volatilidade e aperto.\n
         Nesta app podem consultar a vossa empresa preferida e verificar quantas \
-                quedas superiores a 10% ja sofreu anteriormente.
+                quedas superiores a 10% já sofreu anteriormente.\n
         O passado não serve de exemplo para o futuro, mas trás algum descanso!\n
          *‘Be Fearful When Others Are Greedy and Greedy When \
                 Others Are Fearful’* — Warren Buffett\n
@@ -30,25 +30,25 @@ st.markdown(
      """
 )
 
-st.subheader("Tesla Sentiment")
+st.subheader("📰 Tesla Sentiment")
 
 st.markdown(
     """
     A Tesla é uma das empresas mais bem cotadas na bolsa e talvez por isso, ou por ter\
             um CEO controverso, quase todos os dias saem notícias sobre a empresa.\n
-    Sempre me questionei se as notícias que saiam tinham impacto no valor das acções,\
-            pelo que decidi por à prova.\n
+    Sempre me questionei sobre se as notícias que saiam tinham impacto no valor \
+            das acções, pelo que decidi por à prova.\n
     Extraí todas as notícias da Tesla do site [Teslarati](https://www.teslarati.com) \
             e sobre elas corri um algoritmo de inteligência artificial, que classifica\
             o conteúdo em Positivo, Negativo ou Neutro.\n
     O resultado ficou traçado no gráfico que podem consultar na app.\n
     **Conclusão:** Com esta análise não consigo confirmar a minha suspeita. \
-            O que acham?\n
+            O que acham? 🤔\n
     ---
     """
 )
 
-st.subheader("Food")
+st.subheader("🍲 Food")
 
 st.markdown(
     """
@@ -57,13 +57,13 @@ st.markdown(
     Apesar do veganismo \
             [ser mais do que boa comida](https://www.youtube.com/watch?v=LQRAfJyEsko),\
     nesta app podem consultar todas as fotografias que tirei aos pratos que comi, \
-    em casa e pelo mundo.\n
+    em casa 🏠 e pelo mundo 🌍.\n
     Deliciem-se!\n
     ---
     """
 )
 
-st.subheader("Remax")
+st.subheader("🏘️ Remax")
 
 st.markdown(
     """
