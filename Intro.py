@@ -15,7 +15,7 @@ st.markdown(
     """
 )
 
-st.subheader(" 📉 [Stock Drop](www.joaocassis.pt/Stock_Drop)")
+st.subheader(" 📉 Stock Drop")
 
 st.markdown(
     """
