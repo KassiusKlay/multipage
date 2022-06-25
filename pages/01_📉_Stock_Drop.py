@@ -117,8 +117,8 @@ layers += (
     alt.Chart(df.reset_index())
     .mark_line()
     .encode(
-        x="Date:T",
-        y="Close:Q",
+        x=alt.X("Date:T", axis=alt.Axis(title="Date"), scale=alt.Scale(padding=2)),
+        y=alt.Y("Close:Q", axis=alt.Axis(title="Close")),
     )
 )
 for _, row in drop_df.iterrows():
@@ -132,7 +132,7 @@ for _, row in drop_df.iterrows():
         alt.Chart(
             pd.DataFrame({"date": [mid_point.Date], "close": [period_df.Close.max()]})
         )
-        .mark_text(dy=-20, color="orange", size=30)
+        .mark_text(dy=-20, color="orange", size=20)
         .encode(
             x="date",
             y="close",
@@ -142,19 +142,13 @@ for _, row in drop_df.iterrows():
     layers += drop_line + drop_text
 
 st.title(f"{ticker}")
-st.sidebar.markdown(
-    """
-     - No grafico
-        - A **LARANJA** as quedas superiores a 10%
-     - Primeira tabela
-        - Cada linha corresponde a uma quebra assinalada no grafico
-     - Segunda tabela
-        - Minimo, Maximo e Media dos valores das quedas
-        """
-)
-st.altair_chart(layers, use_container_width=True)
 
-st.dataframe(drop_df)
+chart = (
+    layers.configure_view(stroke=None)
+    .configure_axisX(tickCount="year")
+    .configure_axis(title=None, grid=False)
+)
+st.altair_chart(chart, use_container_width=True)
 
 st.write(
     drop_df[:-1]
@@ -188,45 +182,17 @@ ticker_pct = pd.concat(
 )
 combined_pct = pd.concat([sp500_pct, ticker_pct], axis=0)
 
-nearest = alt.selection(
-    type="single", nearest=True, on="mouseover", fields=["Date"], empty="none"
-)
-selectors = (
-    alt.Chart(combined_pct.reset_index())
-    .mark_point()
-    .encode(
-        x="Date:T",
-        opacity=alt.value(0),
-    )
-    .add_selection(nearest)
-)
-
 line = (
     alt.Chart(combined_pct.reset_index())
     .mark_line()
     .encode(
-        x="Date:T",
-        y=alt.Y("Close:Q", title="Percentage Change"),
+        x=alt.X("Date:T", axis=alt.Axis(tickCount="year"), scale=alt.Scale(padding=2)),
+        y=alt.Y("Close:Q", title="Percentage Change", axis=alt.Axis(format=".0%")),
         color="Ticker",
+        tooltip=alt.Text("Close:Q", format=".0%"),
     )
 )
 
-points = line.mark_point().encode(
-    opacity=alt.condition(nearest, alt.value(1), alt.value(0))
-)
-
-rules = (
-    alt.Chart(combined_pct.reset_index())
-    .mark_rule(color="gray")
-    .encode(
-        x="Date:T",
-    )
-    .transform_filter(nearest)
-)
-
-text = line.mark_text(align="left", dx=5, dy=-5).encode(
-    text=alt.condition(nearest, "Close:Q", alt.value(" "))
-)
-layer = alt.layer(line, selectors, points, rules, text)
+chart = line.configure_view(stroke=None).configure_axis(grid=False)
 st.title(f"{ticker} vs SP500")
-st.altair_chart(layer, use_container_width=True)
+st.altair_chart(chart, use_container_width=True)

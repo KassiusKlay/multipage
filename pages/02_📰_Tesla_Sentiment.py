@@ -11,7 +11,7 @@ START_DATE = "2010-01-01"
 
 @st.experimental_singleton
 def init_engine():
-    engine = create_engine(
+    return create_engine(
         f"postgresql://"
         f'{st.secrets["postgres"]["user"]}:'
         f'{st.secrets["postgres"]["password"]}@'
@@ -19,16 +19,6 @@ def init_engine():
         f'{st.secrets["postgres"]["port"]}/'
         f'{st.secrets["postgres"]["dbname"]}',
     )
-    # except FileNotFoundError:
-    # DB_USER = os.environ.get("DB_USER")
-    # DB_PSWD = os.environ.get("DB_PSWD")
-    # DB_HOST = os.environ.get("DB_HOST")
-    # DB_PORT = os.environ.get("DB_PORT")
-    # DB_NAME = os.environ.get("DB_NAME")
-    # engine = create_engine(
-    # f"postgresql://{DB_USER}:{DB_PSWD}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
-    # )
-    return engine
 
 
 @st.experimental_memo
