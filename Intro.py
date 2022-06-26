@@ -15,7 +15,7 @@ st.markdown(
     """
 )
 
-st.subheader(" 📉 Stock Drop")
+st.subheader(" 📉 [Stock Drop](/Stock_Drop)")
 
 st.markdown(
     """
@@ -30,7 +30,7 @@ st.markdown(
      """
 )
 
-st.subheader("📰 Tesla Sentiment")
+st.subheader("📰 [Tesla Sentiment](/Tesla_Sentiment)")
 
 st.markdown(
     """
@@ -48,7 +48,7 @@ st.markdown(
     """
 )
 
-st.subheader("🍲 Food")
+st.subheader("🍲 [Food](/Food)")
 
 st.markdown(
     """
@@ -63,11 +63,12 @@ st.markdown(
     """
 )
 
-st.subheader("🏘️ Remax")
+st.subheader("🏘️ [Remax](/Remax)")
 
 st.markdown(
     """
-    Procurar casas online e um martírio. 99% é lixo. \n
+    Procurar casas online às vezes é um sacrifício. É difícil filtrar o que \
+            realmente nos interessa \n
     Como a remax é a maior empresa imobiliária em Portugal, criei uma app que \
             que replica o site com alguns dados adicionais, tais como:\n
       * Evolução da oferta no site
