@@ -68,8 +68,8 @@ st.subheader("🏘️ [Remax](/Remax)")
 st.markdown(
     """
     Procurar casas online às vezes é um sacrifício. É difícil filtrar o que \
-            realmente nos interessa \n
-    Como a remax é a maior empresa imobiliária em Portugal, criei uma app que \
+            realmente nos interessa. \n
+    Como a remax é a maior empresa imobiliária em Portugal, criei uma app \
             que replica o site com alguns dados adicionais, tais como:\n
       * Evolução da oferta no site
       * Tendências do mercado, com evolução do preço por metro quadrado
