@@ -95,9 +95,11 @@ def get_mean_price_m2(radio1):
             INNER JOIN remax_listing_dates listing_dates
                     ON listing_dates.id = listings.id
             WHERE
-                    listings.is_sold = False
-                    AND
                     business_types.name = '{radio1}'
+                    AND
+                    listing_dates.date_removed IS NULL
+                    AND
+                    listing_dates.date_sold IS NULL
             """
     )
     df["price_m2"] = df.listing_price / df.area
@@ -105,7 +107,7 @@ def get_mean_price_m2(radio1):
     return (
         df.groupby(["listing_type", "region1", "region2", "region3"])
         .agg({"price_m2": "mean"})
-        .round(2)
+        .round()
     )
 
 
@@ -139,7 +141,9 @@ def get_map_df(radio1, radio2, radio3, radio4, radio5):
                 AND
                 listing_types.name = '{radio2}'
                 AND
-                listings.is_sold = False
+                listing_dates.date_sold IS NULL
+                AND
+                listing_dates.date_removed IS NULL
         """
     if radio3:
         sql = sql + f""" AND region1.name = '{radio3}'"""
@@ -226,7 +230,7 @@ def variation_per_business_type():
             FROM remax_total_listings
             JOIN remax_business_types business_types
                 ON business_types.id = remax_total_listings.business_type_id
-            JOIN remaX_region1 region1
+            JOIN remax_region1 region1
                 ON region1.id = remax_total_listings.id
             """
     )
