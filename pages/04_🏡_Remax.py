@@ -115,8 +115,8 @@ def get_mean_price_m2(radio1):
 def get_map_df(radio1, radio2, radio3, radio4, radio5):
     sql = f"""
         SELECT
-                listings.id, listings.listing_price, listings.latitude,
-                listings.longitude,
+                listings.id, listings.listing_price, listings.is_special,
+                listings.latitude, listings.longitude,
                 listings."area", listings.bedrooms, listings.bathrooms,
                 listing_types.name AS listing_type,
                 region1.name AS region1,
@@ -458,6 +458,9 @@ def filter_price_area(df, color_selection):
         df = df[df[f"{delta}"] < 0]
     elif delta_selection == "Acima da média":
         df = df[df[f"{delta}"] > 0]
+    special = st.checkbox("Apenas Remax Collection")
+    if special:
+        df = df[df.is_special]
     return df.reset_index(drop=True)
 
 
