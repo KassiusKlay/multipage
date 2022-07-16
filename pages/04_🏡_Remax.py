@@ -71,6 +71,48 @@ def apply_color(x):
 
 
 @st.experimental_memo(ttl=6000)
+def get_mean_price_m2(radio1):
+    df = pd_read_sql(
+        f"""
+            SELECT
+                    listings.id, listings.listing_price,
+                    listing_types.name AS listing_type,
+                    listings."area",
+                    region1.name AS region1,
+                    region2.name AS region2,
+                    region3.name AS region3
+            FROM
+                    remax_listings listings
+            INNER JOIN remax_listing_types listing_types
+                    ON listing_types.id = listings.listing_type_id
+            INNER JOIN remax_business_types business_types
+                    ON business_types.id = listings.business_type_id
+            INNER JOIN remax_region1 region1
+                    ON region1.id = listings.region1_id
+            INNER JOIN remax_region2 region2
+                    ON region2.id = listings.region2_id
+            INNER JOIN remax_region3 region3
+                    ON region3.id = listings.region3_id
+            INNER JOIN remax_listing_dates listing_dates
+                    ON listing_dates.id = listings.id
+            WHERE
+                    business_types.name = '{radio1}'
+                    AND
+                    listing_dates.date_removed IS NULL
+                    AND
+                    listing_dates.date_sold IS NULL
+            """
+    )
+    df["price_m2"] = df.listing_price / df.area
+    df.price_m2 = df.price_m2.where(df.area != 0, None)
+    return (
+        df.groupby(["listing_type", "region1", "region2", "region3"])
+        .agg({"price_m2": "mean"})
+        .round()
+    )
+
+
+@st.experimental_memo(ttl=6000)
 def get_map_df(radio1, radio2, radio3, radio4, radio5):
     sql = f"""
         SELECT
@@ -114,11 +156,7 @@ def get_map_df(radio1, radio2, radio3, radio4, radio5):
 
     df["price_m2"] = round(df.listing_price / df.area, 2)
     df.price_m2 = df.price_m2.where(df.area != 0, None)
-    mean_price_m2 = (
-        df.groupby(["listing_type", "region1", "region2", "region3"])
-        .agg({"price_m2": "mean"})
-        .round()
-    )
+    mean_price_m2 = get_mean_price_m2(radio1)
 
     df = df.assign(
         delta0=list(df.listing_type),
