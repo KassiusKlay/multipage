@@ -9,6 +9,8 @@ enableCORS = false
 
 
 printf "
+joaocassis = $PSWD
+
 [postgres]
 host = $DB_HOST
 port = $DB_PORT
