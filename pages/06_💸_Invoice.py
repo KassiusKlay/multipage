@@ -30,10 +30,8 @@ def check_credentials():
         or st.secrets[st.session_state.username] != st.session_state.password
     ):
         st.warning("Tente novamente")
-        return
     else:
         st.session_state.user = st.session_state.username
-        return
 
 
 def login():
