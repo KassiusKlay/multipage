@@ -31,10 +31,13 @@ def check_credentials():
             password=st.session_state.password,
             one_time_password=int(st.session_state.one_time_password),
         )
-        st.session_state.api = TradingAPI(credentials=credentials)
-        st.session_state.api.connect()
+        api = TradingAPI(credentials=credentials)
+        api.connect()
+        st.session_state.api = api
+        return
     except Exception:
         st.warning("Wrong Credentials")
+        return
 
 
 def login():
@@ -300,7 +303,6 @@ if "api" not in st.session_state:
     st.stop()
 
 api = st.session_state.api
-
 account_df = get_account_overview(api)
 
 transaction_df = get_transaction_history(api)
