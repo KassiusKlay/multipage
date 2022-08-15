@@ -27,6 +27,7 @@ executing==0.8.3
 fastjsonschema==2.15.3
 flake8==4.0.1
 folium==0.12.1.post1
+forex-python==1.8
 gitdb==4.0.9
 GitPython==3.1.27
 grpcio==1.48.0
@@ -92,6 +93,7 @@ requests==2.28.0
 rich==12.4.4
 semver==2.13.0
 Send2Trash==1.8.0
+simplejson==3.17.6
 six==1.16.0
 smmap==5.0.0
 soupsieve==2.3.2.post1
