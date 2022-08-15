@@ -12,8 +12,8 @@ from degiro_connector.trading.models.trading_pb2 import (
     ProductsInfo,
     Update,
 )
-from degiro_connector.quotecast.api import API as QuotecastAPI
-from degiro_connector.quotecast.models.quotecast_pb2 import Quotecast
+from forex_python.converter import CurrencyRates
+import numpy as np
 
 st.set_page_config(layout="wide")
 
@@ -167,6 +167,13 @@ def add_current_portfolio_data(current_portfolio):
     return current_portfolio.merge(df, on="symbol")
 
 
+@st.experimental_memo
+def get_usd_eur_exchange_rate():
+
+    c = CurrencyRates()
+    return c.get_rate("USD", "EUR")
+
+
 def percentage(val):
     if val > 0:
         color = "green"
@@ -268,7 +275,38 @@ def show_transaction_history(transaction_df):
 
     df = transaction_df[transaction_df.symbol == ticker]
     df = process_splits_data(df)
+    df.date = df.date.apply(pd.Timestamp)
     historical_data = yf.download(ticker)["Close"].reset_index()
+    today = historical_data.iloc[-1].Close
+    cur = get_usd_eur_exchange_rate()
+    df["PL"] = df.quantity * today * cur + df.totalPlusAllFeesInBaseCurrency
+
+    window = 7
+    list_of_min = []
+    list_of_max = []
+    for i, row in df.iterrows():
+        start_date = (row.date - pd.Timedelta(days=window)).date()
+        end_date = (row.date + pd.Timedelta(days=window)).date()
+        subset_df = historical_data[
+            (historical_data.Date.dt.date > start_date)
+            & (historical_data.Date.dt.date < end_date)
+        ].Close
+        list_of_min.append(subset_df.min())
+        list_of_max.append(subset_df.max())
+    df = df.assign(min_price=list_of_min, max_price=list_of_max)
+    df["pct_min"] = df[["min_price", "price"]].pct_change(axis=1)["price"]
+    df["pct_max"] = df[["price", "max_price"]].pct_change(axis=1)["max_price"]
+    df["Best"] = df.PL + df.PL * df.pct_min
+    df["Worst"] = df.PL - df.PL * df.pct_max
+    df["ideal"] = df.PL + df.PL * df.pct_min
+    pct_pl = df.PL.sum() / df.totalPlusAllFeesInBaseCurrency.abs().sum()
+    best = df.PL.sum() - df.Best.sum()
+    worst = df.PL.sum() - df.Worst.sum()
+    cols = st.columns(3)
+    cols[0].metric("Current PL", f"{int(df.PL.sum())}€", f"{pct_pl:.0%}")
+    cols[1].metric("Vs. Best Investor", f"{int(df.Best.sum())}€", f"{int(best)}€")
+    cols[2].metric("Vs. Worst Investor", f"{int(df.Worst.sum())}€", f"{int(worst)}€")
+
     df.totalPlusFeeInBaseCurrency = df.totalPlusFeeInBaseCurrency.abs()
     line = alt.Chart(historical_data).mark_line().encode(x="Date:T", y="Close:Q")
     circle = (
@@ -287,7 +325,6 @@ def show_transaction_history(transaction_df):
         )
         .interactive()
     )
-
     st.altair_chart(line + circle, use_container_width=True)
 
 
