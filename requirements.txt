@@ -25,7 +25,7 @@ degiro-connector==2.0.21
 entrypoints==0.4
 executing==0.8.3
 fastjsonschema==2.15.3
-flake8==4.0.1
+flake8==5.0.4
 folium==0.12.1.post1
 forex-python==1.8
 gitdb==4.0.9
@@ -47,7 +47,7 @@ jupyterlab-widgets==1.1.0
 lxml==4.9.0
 MarkupSafe==2.1.1
 matplotlib-inline==0.1.3
-mccabe==0.6.1
+mccabe==0.7.0
 mistune==0.8.4
 multitasking==0.0.10
 mypy-extensions==0.4.3
@@ -77,10 +77,10 @@ psycopg2-binary==2.9.3
 ptyprocess==0.7.0
 pure-eval==0.2.2
 pyarrow==8.0.0
-pycodestyle==2.8.0
+pycodestyle==2.9.1
 pycparser==2.21
 pydeck==0.7.1
-pyflakes==2.4.0
+pyflakes==2.5.0
 Pygments==2.12.0
 Pympler==1.0.1
 pyparsing==3.0.9
@@ -97,9 +97,9 @@ simplejson==3.17.6
 six==1.16.0
 smmap==5.0.0
 soupsieve==2.3.2.post1
-SQLAlchemy==1.4.39
+SQLAlchemy==1.4.40
 stack-data==0.3.0
-streamlit==1.11.1
+streamlit==1.12.0
 streamlit-folium==0.6.14
 tenacity==8.0.1
 terminado==0.15.0
