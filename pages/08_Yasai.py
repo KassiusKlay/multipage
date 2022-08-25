@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 import hashlib
 from PyPDF2 import PdfReader
 import re
+import datetime
 
 
 st.set_page_config(layout="wide")
@@ -166,6 +167,54 @@ def upload_files():
             st.info("Sem faturas novas")
 
 
+def manual_input():
+    stored_df = get_stored_data()
+    cols = st.columns(4)
+    linhas = cols[0].number_input("Linhas", 1, step=1)
+    data = cols[1].date_input("Data", value=datetime.date.today())
+    fornecedores = stored_df.fornecedor.sort_values().unique().tolist()
+    fornecedores.insert(0, "Novo")
+    produtos = stored_df.produto.sort_values().unique().tolist()
+    produtos.insert(0, "Novo")
+    fornecedor = cols[2].selectbox("Fornecedor", fornecedores)
+    if fornecedor == "Novo":
+        fornecedor = cols[3].text_input("Novo fornecedor")
+    df = pd.DataFrame()
+    for i in range(int(linhas)):
+        cols = st.columns([1, 2, 0.5, 0.5, 0.5, 0.5])
+        codigo = cols[0].text_input("Codigo", key=f"codigo_{i}")
+        produto = cols[1].selectbox("Produto", produtos, key=f"produto_{i}")
+        if produto == "Novo":
+            produto = cols[1].text_input("Novo produto", key=f"novo_produto_{i}")
+        peso = cols[2].number_input("Peso (kg)", min_value=0.0, key=f"peso_{i}")
+        unidade = cols[3].number_input("Unidade", min_value=0, key=f"unidade_{i}")
+        preco_unidade = cols[4].number_input(
+            "Preco", min_value=0.0, key=f"preco_unidade_{i}"
+        )
+        iva = cols[5].selectbox("IVA", options=[0, 6, 23], key=f"iva_{i}")
+        if not unidade or not produto:
+            st.warning("Linha incompleta")
+            st.stop()
+        df = pd.concat(
+            [
+                df,
+                pd.DataFrame.from_records(
+                    {
+                        "codigo": codigo,
+                        "produto": produto,
+                        "peso": peso,
+                        "unidade": unidade,
+                        "preco_unidade": preco_unidade,
+                        "iva": iva,
+                    },
+                    index=[0],
+                ),
+            ]
+        )
+    df = df.assign(data=data, fornecedor=fornecedor)
+    st.write(df)
+
+
 def main_page():
     stored_df = get_stored_data()
     st.write(stored_df)
@@ -176,9 +225,13 @@ if "yasai" not in st.session_state:
     st.stop()
 
 
-option = st.sidebar.radio("", ["Ver Dados", "Carregar Ficheiros"])
+option = st.sidebar.radio(
+    "", ["Ver Dados", "Carregar Ficheiros", "Introduzir Manualmente"]
+)
 
 if option == "Ver Dados":
     main_page()
-else:
+elif option == "Carregar Ficheiros":
     upload_files()
+elif option == "Introduzir Manualmente":
+    manual_input()
