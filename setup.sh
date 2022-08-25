@@ -9,7 +9,8 @@ enableCORS = false
 
 
 printf "
-joaocassis = $PSWD
+$SISPAT
+$YASAI
 
 [postgres]
 host = $DB_HOST
