@@ -2,8 +2,13 @@ import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine
 import altair as alt
+import hashlib
 
 st.set_page_config(layout="wide")
+user_hex = (
+    "033758f933cd377cf41ff7c43997bd00e9a8284694935be5435ace73ff277c3457a8ed7f18"
+    "b81822eca326b1324d20496681ec0d5e514e90816fdc036fbcc0a1"
+)
 
 
 @st.experimental_singleton
@@ -25,14 +30,12 @@ def check_credentials():
     if (
         not st.session_state.username
         or not st.session_state.password
-        or st.session_state.username not in st.secrets.keys()
+        or hashlib.sha512(st.session_state.username.encode()).hexdigest() != user_hex
         or st.secrets[st.session_state.username] != st.session_state.password
     ):
         st.warning("Tente novamente")
-        return
     else:
-        st.session_state.user = st.session_state.username
-        return
+        st.session_state.sispat = True
 
 
 def login():
@@ -347,7 +350,7 @@ def upload_files():
         st.success("Ficheiros Carregados")
 
 
-if "user" not in st.session_state:
+if "sispat" not in st.session_state:
     login()
     st.stop()
 
