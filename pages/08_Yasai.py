@@ -132,6 +132,35 @@ def process_pdf_kitch(text):
     return df
 
 
+def process_pdf_weat(text):
+    nr_fatura = re.search(r"\d{4}\/\d+", text).group()
+    data = pd.Timestamp(
+        re.search(r"Data de Emissão (\d{4}-\d{2}-\d{2})", text).groups(0)[0]
+    )
+    item = re.search(r"TOTAL (.*) Resumo", text).groups(0)[0]
+    produto = re.search("[A-Z].*", item).group()
+    preco_unidade = float(
+        re.search(r" (.*?) ", item).group().replace(".", "").replace(",", ".")
+    )
+    unidade = int(re.search(r"(.*?).", item).group())
+    iva = int(re.findall(r"(.*?) ", item)[3].split(".")[0])
+    df = pd.DataFrame(
+        {
+            "data": data,
+            "nr_fatura": nr_fatura,
+            "codigo": None,
+            "produto": produto,
+            "unidade": unidade,
+            "preco_unidade": preco_unidade,
+            "iva": iva,
+            "peso": None,
+            "fornecedor": "Weat",
+        },
+        index=[0],
+    )
+    return df
+
+
 @st.experimental_memo
 def get_stored_data():
     return pd.read_sql(
@@ -158,6 +187,8 @@ def upload_files():
                 df = pd.concat([df, process_pdf_bluespring(text)])
             elif "Kitch" in text.split()[0]:
                 df = pd.concat([df, process_pdf_kitch(text)])
+            elif "WGH, LDA" in text:
+                df = pd.concat([df, process_pdf_weat(text)])
         df = pd.concat([stored_df, stored_df, df]).drop_duplicates(keep=False)
         if not df.empty:
             df.to_sql("yasai_faturas", engine, if_exists="append", index=False)
@@ -179,6 +210,9 @@ def manual_input():
     fornecedor = cols[2].selectbox("Fornecedor", fornecedores)
     if fornecedor == "Novo":
         fornecedor = cols[3].text_input("Novo fornecedor")
+    if not fornecedor:
+        st.warning("Inserir fornecedor")
+        st.stop()
     df = pd.DataFrame()
     for i in range(int(linhas)):
         cols = st.columns([1, 2, 0.5, 0.5, 0.5, 0.5])
