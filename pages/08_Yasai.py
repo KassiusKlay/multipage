@@ -49,7 +49,7 @@ def login():
 
 
 def process_pdf_rota(text):
-    items = re.findall(r"W\d{5}.*?(?=€ W)", text)
+    items = re.findall(r"W\d+.*?€(?= [A-Z])", text)
     df = pd.DataFrame()
     for item in items:
         codigo = re.search(r"W\d{5}", item).group()
@@ -71,7 +71,7 @@ def process_pdf_rota(text):
         df = pd.concat(
             [df, pd.DataFrame.from_records(row, index=[0])], ignore_index=True
         )
-    df["nr_fatura"] = re.search(r"\w{2} \w{3}\/\d{4}", text).group()
+    df["nr_fatura"] = re.search(r"Fatura-Recibo.*?(\w+\/\d+)", text).groups(0)[0]
     df["data"] = pd.Timestamp(
         re.search(r"Data de Emissão: (\d{2}-\d{2}-\d{4})", text).groups(0)[0]
     )
@@ -80,7 +80,7 @@ def process_pdf_rota(text):
 
 
 def process_pdf_bluespring(text):
-    nr_fatura = re.search(r"FA \d{4}\/\d{3}", text).group()
+    nr_fatura = re.search(r"FA (\d{4}\/\d+)", text).groups(0)[0]
     data = pd.Timestamp(
         re.search(r"\d{2}\/\d{2}\/\d{4}(\d{2}\/\d{2}\/\d{4})", text).groups(0)[0]
     )
@@ -108,7 +108,7 @@ def process_pdf_bluespring(text):
 
 
 def process_pdf_kitch(text):
-    nr_fatura = re.search("FR.*?(?= Original)", text).group()
+    nr_fatura = re.search(r"\d{4}\/\d+", text).group()
     data = pd.Timestamp(re.search(r"\d{4}-\d{2}-\d{2}", text).group())
     item = re.search(r"AT (.*)?(?= Kitch,)", text).groups(0)[0]
     produto = re.search(r".+?(?= €)", item).group()
@@ -181,11 +181,11 @@ def upload_files():
             reader = PdfReader(file)
             page = reader.pages[0]
             text = page.extract_text().replace("\n", " ")
-            if "Quinta" in text.split()[0]:
+            if "Quinta Encantada Unip. Lda" in text:
                 df = pd.concat([df, process_pdf_rota(text)])
-            elif "bluespring" in text:
+            elif "Blue Spring II - Soluções Empresariais, Lda" in text:
                 df = pd.concat([df, process_pdf_bluespring(text)])
-            elif "Kitch" in text.split()[0]:
+            elif "Kitch, Unipessoal Lda" in text:
                 df = pd.concat([df, process_pdf_kitch(text)])
             elif "WGH, LDA" in text:
                 df = pd.concat([df, process_pdf_weat(text)])
