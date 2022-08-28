@@ -13,7 +13,6 @@ from degiro_connector.trading.models.trading_pb2 import (
     Update,
 )
 from forex_python.converter import CurrencyRates
-import numpy as np
 
 st.set_page_config(layout="wide")
 
@@ -127,21 +126,18 @@ def get_product_info(_api, _productsId):
 @st.experimental_memo
 def process_splits_data(df):
     splits = df.loc[df.transactionTypeId == 101].groupby("date")
-    for split, split_df in splits:
+    for _, split_df in splits:
         split_factor = (
             split_df.loc[split_df.buysell == "S"].price.iloc[0]
             / split_df.loc[split_df.buysell == "B"].price.iloc[0]
         )
         df.price = df.price.where(
-            ~(df.date < split_df.date.iloc[0]), other=(df.price / split_factor)
+            df.date > split_df.date.iloc[0], df.price / split_factor
         )
         df.quantity = df.quantity.where(
-            ~(df.date < split_df.date.iloc[0]), other=(df.quantity * split_factor)
+            df.date > split_df.date.iloc[0], df.quantity * split_factor
         )
-        df = df.merge(split_df, how="outer", indicator=True).loc[
-            lambda x: x["_merge"] == "left_only"
-        ]
-    df = df.drop(df.columns[-1], axis=1)
+        df = pd.concat([df, split_df]).drop_duplicates(subset="id", keep=False)
     return df
 
 
@@ -169,7 +165,6 @@ def add_current_portfolio_data(current_portfolio):
 
 @st.experimental_memo
 def get_usd_eur_exchange_rate():
-
     c = CurrencyRates()
     return c.get_rate("USD", "EUR")
 
@@ -334,6 +329,7 @@ if logout:
         del st.session_state.api
     except AttributeError:
         pass
+    st.experimental_memo.clear()
 
 if "api" not in st.session_state:
     login()
@@ -341,7 +337,6 @@ if "api" not in st.session_state:
 
 api = st.session_state.api
 account_df = get_account_overview(api)
-
 transaction_df = get_transaction_history(api)
 products_info = get_product_info(api, transaction_df.productId.unique())
 transaction_df.insert(
