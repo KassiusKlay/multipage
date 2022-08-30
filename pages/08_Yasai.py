@@ -56,16 +56,14 @@ def process_pdf_rota(text):
         produto = re.search(r"W\d{5} (.*)?(?= \()", item).groups(0)[0]
         peso = re.search(r"\d,\d{3}Gr", item).group()[0]
         unidade = re.search(r"\d Uni", item).group()[0]
-        preco_unidade = (
-            re.search(r"\d Uni. ([0-9,]+)", item).groups(0)[0].replace(",", ".")
-        )
+        preco_sem_iva = re.search(r"% (\d+,\d+)", item).groups(0)[0].replace(",", ".")
         iva = re.search(r"€ \d+%", item).group()[2:-1]
         row = {
             "codigo": codigo,
             "produto": produto,
             "peso": int(peso),
             "unidade": int(unidade),
-            "preco_unidade": float(preco_unidade),
+            "preco_sem_iva": float(preco_sem_iva),
             "iva": int(iva),
         }
         df = pd.concat(
@@ -88,7 +86,7 @@ def process_pdf_bluespring(text):
     produto = re.search(r".+?(?= \d)", item).group()
     numeros = re.findall(r"\d+,?\d+", item)
     unidade = int(float(numeros[0].replace(",", ".")))
-    preco_unidade = float(numeros[1].replace(",", "."))
+    preco_sem_iva = float(numeros[4].replace(",", "."))
     iva = int(float(numeros[3].replace(",", ".")))
     df = pd.DataFrame(
         {
@@ -97,7 +95,7 @@ def process_pdf_bluespring(text):
             "codigo": None,
             "produto": produto,
             "unidade": unidade,
-            "preco_unidade": preco_unidade,
+            "preco_sem_iva": preco_sem_iva,
             "iva": iva,
             "peso": None,
             "fornecedor": "BlueSpring",
@@ -112,7 +110,9 @@ def process_pdf_kitch(text):
     data = pd.Timestamp(re.search(r"\d{4}-\d{2}-\d{2}", text).group())
     item = re.search(r"AT (.*)?(?= Kitch,)", text).groups(0)[0]
     produto = re.search(r".+?(?= €)", item).group()
-    preco_unidade = float(re.search(r"\d.+?(?= Uni)", item).group().replace(",", "."))
+    preco_sem_iva = float(
+        re.search(r"Uni \d+ \d+% € (\d+,\d+)", item).groups(0)[0].replace(",", ".")
+    )
     unidade = int(re.search(r"Uni (\d)", item).groups(0)[0])
     iva = int(re.search(r"(\d+)%", item).groups(0)[0])
     df = pd.DataFrame(
@@ -122,7 +122,7 @@ def process_pdf_kitch(text):
             "codigo": None,
             "produto": produto,
             "unidade": unidade,
-            "preco_unidade": preco_unidade,
+            "preco_sem_iva": preco_sem_iva,
             "iva": iva,
             "peso": None,
             "fornecedor": "Kitch",
@@ -139,7 +139,7 @@ def process_pdf_weat(text):
     )
     item = re.search(r"TOTAL (.*) Resumo", text).groups(0)[0]
     produto = re.search("[A-Z].*", item).group()
-    preco_unidade = float(
+    preco_sem_iva = float(
         re.search(r" (.*?) ", item).group().replace(".", "").replace(",", ".")
     )
     unidade = int(re.search(r"(.*?).", item).group())
@@ -151,7 +151,7 @@ def process_pdf_weat(text):
             "codigo": None,
             "produto": produto,
             "unidade": unidade,
-            "preco_unidade": preco_unidade,
+            "preco_sem_iva": preco_sem_iva,
             "iva": iva,
             "peso": None,
             "fornecedor": "Weat",
@@ -200,33 +200,43 @@ def upload_files():
 
 def manual_input():
     stored_df = get_stored_data()
-    cols = st.columns(4)
+    cols = st.columns(5)
     linhas = cols[0].number_input("Linhas", 1, step=1)
     data = cols[1].date_input("Data", value=datetime.date.today())
+    nr_fatura = cols[2].text_input("Número de Fatura")
     fornecedores = stored_df.fornecedor.sort_values().unique().tolist()
     fornecedores.insert(0, "Novo")
     produtos = stored_df.produto.sort_values().unique().tolist()
     produtos.insert(0, "Novo")
-    fornecedor = cols[2].selectbox("Fornecedor", fornecedores)
+    fornecedor = cols[3].selectbox("Fornecedor", fornecedores)
     if fornecedor == "Novo":
-        fornecedor = cols[3].text_input("Novo fornecedor")
-    if not fornecedor:
-        st.warning("Inserir fornecedor")
+        fornecedor = cols[4].text_input("Novo fornecedor")
+    if not fornecedor or not nr_fatura:
+        st.warning("Dados Incompletos")
         st.stop()
     df = pd.DataFrame()
     for i in range(int(linhas)):
-        cols = st.columns([1, 2, 0.5, 0.5, 0.5, 0.5])
+        cols = st.columns([0.5, 1, 1, 0.5, 0.5, 0.5, 0.5, 0.5])
         codigo = cols[0].text_input("Codigo", key=f"codigo_{i}")
         produto = cols[1].selectbox("Produto", produtos, key=f"produto_{i}")
         if produto == "Novo":
             produto = cols[1].text_input("Novo produto", key=f"novo_produto_{i}")
-        peso = cols[2].number_input("Peso (kg)", min_value=0.0, key=f"peso_{i}")
-        unidade = cols[3].number_input("Unidade", min_value=0, key=f"unidade_{i}")
-        preco_unidade = cols[4].number_input(
-            "Preco", min_value=0.0, key=f"preco_unidade_{i}"
+        descricao = cols[2].text_input("Descrição", key=f"descricao_{i}")
+        peso = cols[3].number_input("Peso (kg)", min_value=0.0, key=f"peso_{i}")
+        unidade = cols[4].number_input("Unidade", min_value=0, key=f"unidade_{i}")
+        preco_sem_iva = cols[5].number_input(
+            "Preco Sem IVA", min_value=0.0, key=f"preco_sem_iva_{i}"
         )
-        iva = cols[5].selectbox("IVA", options=[0, 6, 23], key=f"iva_{i}")
-        if not unidade or not produto:
+        preco_com_iva = cols[6].number_input(
+            "Preco Com IVA", min_value=0.0, key=f"preco_com_iva_{i}"
+        )
+        iva = cols[7].selectbox("IVA", options=[0, 6, 23], key=f"iva_{i}")
+        if preco_sem_iva and preco_com_iva:
+            st.warning("Não pode ter os dois preços")
+            st.stop()
+        if preco_com_iva and iva:
+            preco_sem_iva = preco_com_iva / (1 + iva / 100)
+        if not unidade or not descricao or not produto:
             st.warning("Linha incompleta")
             st.stop()
         df = pd.concat(
@@ -236,17 +246,37 @@ def manual_input():
                     {
                         "codigo": codigo,
                         "produto": produto,
+                        "descricao": descricao,
                         "peso": peso,
                         "unidade": unidade,
-                        "preco_unidade": preco_unidade,
+                        "preco_sem_iva": round(preco_sem_iva, 2),
                         "iva": iva,
                     },
                     index=[0],
                 ),
             ]
         )
-    df = df.assign(data=data, fornecedor=fornecedor)
-    st.write(df)
+    df = df.assign(data=pd.Timestamp(data), fornecedor=fornecedor, nr_fatura=nr_fatura)
+    st.write(df.reset_index(drop=True))
+    st.write(
+        "Total Sem Iva:",
+        df.preco_sem_iva.sum(),
+        "IVA:",
+        (df.preco_sem_iva * df.iva / 100).sum(),
+        "TOTAL:",
+        df.preco_sem_iva.sum() + (df.preco_sem_iva * df.iva / 100).sum(),
+    )
+    confirmar = st.button("Confirmar?")
+    if confirmar:
+        st.experimental_memo.clear()
+        stored_df = get_stored_data()
+        df = pd.concat([stored_df, stored_df, df]).drop_duplicates(keep=False)
+        if not df.empty:
+            df.to_sql("yasai_faturas", engine, if_exists="append", index=False)
+            st.experimental_memo.clear()
+            st.success("Fatura guardada")
+        else:
+            st.info("Sem faturas novas")
 
 
 def main_page():
@@ -258,6 +288,7 @@ if "yasai" not in st.session_state:
     login()
     st.stop()
 
+st.sidebar.write("TODO: Melhorar regex em todas")
 
 option = st.sidebar.radio(
     "", ["Ver Dados", "Carregar Ficheiros", "Introduzir Manualmente"]
