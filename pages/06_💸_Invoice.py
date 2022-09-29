@@ -107,6 +107,7 @@ def process_df(df):
         "percentagem",
         "honorarios",
     ]
+    st.write(df)
     if not df.empty:
         df[["entrada", "expedido"]] = df[["entrada", "expedido"]].applymap(
             from_excel_datetime
