@@ -107,9 +107,10 @@ def process_df(df):
         "percentagem",
         "honorarios",
     ]
-    df[["entrada", "expedido"]] = df[["entrada", "expedido"]].applymap(
-        from_excel_datetime
-    )
+    if not df.empty:
+        df[["entrada", "expedido"]] = df[["entrada", "expedido"]].applymap(
+            from_excel_datetime
+        )
     df.honorarios = round(df.honorarios.astype(float), 3)
     return df
 
