@@ -107,9 +107,11 @@ def process_df(df):
         "percentagem",
         "honorarios",
     ]
-    df[["entrada", "expedido"]] = df[["entrada", "expedido"]].applymap(
-        from_excel_datetime
-    )
+    st.write(df)
+    if not df.dropna().empty:
+        df[["entrada", "expedido"]] = df[["entrada", "expedido"]].applymap(
+            from_excel_datetime
+        )
     df.honorarios = round(df.honorarios.astype(float), 3)
     return df
 
@@ -118,11 +120,10 @@ def process_file_df(file_df):
     hluz = process_df(file_df["Actividade HLUZ"])
     torres = process_df(file_df["Actividade HLTL"])
     odivelas = process_df(file_df["Actividade HLOD"])
-    hba = process_df(file_df["Actividade HBA"])
     cca = process_df(file_df["Actividade CCA"])
     cpp = process_df(file_df["Actividade CPP"])
     df = (
-        pd.concat([hluz, torres, odivelas, hba, cpp, cca], ignore_index=True)
+        pd.concat([hluz, torres, odivelas, cpp, cca], ignore_index=True)
         .sort_values(by="entrada")
         .reset_index(drop=True)
     )
