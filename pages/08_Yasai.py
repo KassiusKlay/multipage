@@ -182,7 +182,7 @@ def process_pdf_makro(text):
         produto = re.search(
             r"\d{5,14} (.*) \w{2} [\d,]+ [\d,]+ [\d,]+ [\d,]+ [\d,]+ \d", item
         ).groups(0)[0]
-        peso = int(float(numbers[1].replace(",", ".")))
+        peso = float(numbers[1].replace(",", "."))
         unidade = int(numbers[3])
         preco_sem_iva = float(numbers[4].replace(",", "."))
         iva = iva_dict[numbers[5]]
@@ -239,7 +239,9 @@ def process_pdf_triponto(text):
 
 
 def upload_faturas_from_files():
-    stored_df = 1
+    stored_df = pd.read_sql(
+        "SELECT * FROM yasai_faturas", engine, index_col="id", parse_dates="data"
+    )
     uploaded_files = st.file_uploader(
         "",
         type="pdf",
@@ -252,7 +254,6 @@ def upload_faturas_from_files():
             page = reader.pages[0]
             text = page.extract_text().replace("\n", " ")
             text = re.sub(" +", " ", text)
-            st.write(text)
             if "Quinta Encantada Unip. Lda" in text:
                 df = pd.concat([df, process_pdf_rota(text)])
             elif "Blue Spring II - Soluções Empresariais, Lda" in text:
@@ -281,7 +282,9 @@ def upload_faturas_from_files():
 
 
 def upload_faturas_manually():
-    stored_df = 1
+    stored_df = pd.read_sql(
+        "SELECT * FROM yasai_faturas", engine, index_col="id", parse_dates="data"
+    )
     cols = st.columns(5)
     linhas = cols[0].number_input("Linhas", 1, step=1)
     data = cols[1].date_input("Data", value=datetime.date.today())
@@ -430,21 +433,38 @@ def upload_uber():
             upload_uber_to_supabase(df, "uber_payment_details")
 
 
+def uber_show_data():
+    df1 = pd.read_sql("SELECT * FROM uber_payment_details", engine, index_col="id")
+    df2 = pd.read_sql("SELECT * FROM uber_item_feedback", engine, index_col="id")
+    df3 = pd.read_sql("SELECT * FROM uber_customer_feedback", engine, index_col="id")
+    df4 = pd.read_sql(
+        "SELECT * FROM uber_order_history",
+        engine,
+        index_col="id",
+        parse_dates="Time Customer Ordered",
+    )
+    data_frames = [df1, df2, df3, df4]
+    df_merged = reduce(
+        lambda left, right: pd.merge(left, right, on=["Order ID"], how="outer"),
+        data_frames,
+    )
+    st.write(df_merged)
+
+    st.header("Total Vendas")
+    sales_by_day = (
+        df_merged.drop_duplicates(subset="Order ID")
+        .groupby(pd.Grouper(key="Time Customer Ordered", freq="D"))["Ticket Size"]
+        .sum()
+        .reset_index()
+    )
+    st.write(sales_by_day)
+    st.line_chart(data=sales_by_day, x="Time Customer Ordered", y="Ticket Size")
+
+
 def uber():
     tab1, tab2 = st.tabs(["Ver Dados", "Carregar Ficheiros"])
     with tab1:
-        df1 = pd.read_sql("SELECT * FROM uber_payment_details", engine, index_col="id")
-        df2 = pd.read_sql("SELECT * FROM uber_item_feedback", engine, index_col="id")
-        df3 = pd.read_sql(
-            "SELECT * FROM uber_customer_feedback", engine, index_col="id"
-        )
-        df4 = pd.read_sql("SELECT * FROM uber_order_history", engine, index_col="id")
-        data_frames = [df1, df2, df3, df4]
-        df_merged = reduce(
-            lambda left, right: pd.merge(left, right, on=["Order ID"], how="outer"),
-            data_frames,
-        )
-        st.write(df_merged)
+        uber_show_data()
     with tab2:
         upload_uber()
 
@@ -454,7 +474,14 @@ def faturas():
         ["Ver Dados", "Carregar Ficheiros", "Introduzir Manualmente"]
     )
     with tab1:
-        st.write("ok")
+        st.write(
+            pd.read_sql(
+                "SELECT * FROM yasai_faturas",
+                engine,
+                index_col="id",
+                parse_dates="data",
+            )
+        )
     with tab2:
         upload_faturas_from_files()
     with tab3:
@@ -493,19 +520,103 @@ def santander():
                 {"credito": "sum", "debito": "sum"}
             )
         )
-
     with tab2:
         upload_santander()
+
+
+def kitch_venda_de_items():
+    file = st.file_uploader("Upload CSV", ["csv"], False, key="upload_kitch_items")
+    if file:
+        df = pd.read_csv(file)
+        df = df.iloc[:, 1:3]
+        df.columns = ["name", "count"]
+        df = df[["name", "count"]]
+        df["daily_average"] = df["count"] / 7
+        st.table(df)
+
+
+def upload_kitch():
+    files = st.file_uploader("Upload CSV", ["csv"], True, key="upload_kitch")
+    for file in files:
+        df = pd.read_csv(file)
+        df.createdAt = pd.to_datetime(df.createdAt.str[:10])
+        df.columns = [
+            "date",
+            "channel",
+            "ticket_id",
+            "order_id",
+            "delivery_partner",
+            "sales",
+            "discounts",
+            "delivery_fees",
+            "total",
+        ]
+        stored_df = pd.read_sql(
+            "SELECT * FROM yasai_kitch", engine, index_col="id", parse_dates="date"
+        )
+        df = pd.concat([stored_df, stored_df, df]).drop_duplicates(keep=False)
+        if not df.empty:
+            df.to_sql("yasai_kitch", engine, if_exists="append", index=False)
+
+
+def kitch():
+    tab1, tab2, tab3 = st.tabs(
+        ["Ver Dados", "Venda de Items Por Data", "Carregar Ficheiros"]
+    )
+    with tab1:
+        df = pd.read_sql(
+            "SELECT * FROM yasai_kitch", engine, index_col="id", parse_dates="date"
+        )
+        st.write(df)
+        with st.form(key="filter_kitch"):
+            cols = st.columns(2)
+            start_date = cols[0].date_input("Data Inicio")
+            end_date = cols[1].date_input("Data Fim")
+            confirm = st.form_submit_button("Confirmar")
+        if confirm:
+            filter_df = df[
+                (df.delivery_partner == "delivery_by_restaurant")
+                & (df.date.between(str(start_date)[:10], str(end_date)[:10]))
+            ]
+            st.write(filter_df)
+            st.write("Delivery Fees:", filter_df.delivery_fees.sum())
+            st.write("2.9% sobre vendas sem delivery:", filter_df.sales.sum() * 0.029)
+            st.write("2.9% sobre vendas com delivery:", filter_df.total.sum() * 0.029)
+            st.write("1.49 de taxa de entrega:", len(filter_df) * 1.49)
+            st.write(
+                "Total Service Fees (sem delivery, com delivery):",
+                (filter_df.sales.sum() * 0.029 + len(filter_df) * 1.49) * 1.23,
+                (filter_df.total.sum() * 0.029 + len(filter_df) * 1.49) * 1.23,
+            )
+            kitch = df[
+                (df.channel == "kitch")
+                & (df.date.between(str(start_date)[:10], str(end_date)[:10]))
+            ]
+            st.write(kitch)
+            st.write("Service Fees na Kitch:", kitch.total.sum() * 0.059)
+            st.write("Total Vendas na Kitch:", kitch.sales.sum())
+
+    with tab2:
+        kitch_venda_de_items()
+    with tab3:
+        upload_kitch()
 
 
 if "yasai" not in st.session_state:
     login()
     st.stop()
 
-option = st.sidebar.radio("", ["Uber", "Faturas", "Santander"])
+
+st.title("YASAI")
+option = st.sidebar.radio(
+    "option", ["Uber", "Faturas", "Santander", "Kitch"], label_visibility="hidden"
+)
+
 if option == "Uber":
     uber()
 elif option == "Faturas":
     faturas()
 elif option == "Santander":
     santander()
+elif option == "Kitch":
+    kitch()
