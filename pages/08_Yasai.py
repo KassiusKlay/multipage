@@ -15,8 +15,7 @@ user_hex = (
 city_id = "2267057"
 lat = "38.7167"
 lon = "-9.1333"
-API_key = "8133cd847f23b2c79eec9f5661892669"
-weather_url = f"http://api.openweathermap.org/data/2.5/forecast?id={city_id}&appid={API_key}&units=metric"
+weather_url = f"http://api.openweathermap.org/data/2.5/forecast?id={city_id}&appid={st.secrets['weather_api']}&units=metric"
 data = requests.get(weather_url).json()
 # st.write(data)
 
