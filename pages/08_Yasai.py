@@ -2,8 +2,6 @@ import streamlit as st
 import pandas as pd
 from sqlalchemy import create_engine
 import hashlib
-import requests
-from datetime import datetime
 from meteostat import Point, Daily
 import altair as alt
 
@@ -12,12 +10,6 @@ user_hex = (
     "d97d0a1803e85af46fa24716ac627425afc9a46b95e643527d2a8b72dcb1d2d852fe61cbbe"
     "094e0d6e3a7d491baec7ec68e9d7d6d102d5b6c629769993a056f1"
 )
-city_id = "2267057"
-lat = "38.7167"
-lon = "-9.1333"
-weather_url = f"http://api.openweathermap.org/data/2.5/forecast?id={city_id}&appid={st.secrets['weather_api']}&units=metric"
-data = requests.get(weather_url).json()
-# st.write(data)
 
 
 @st.experimental_singleton
@@ -110,13 +102,50 @@ def kitch_show_data():
     st.write(df)
     st.write(df.corr()["sales"])
     weekly_sales = df.groupby(pd.Grouper(level="date", freq="W")).agg({"sales": "sum"})
-    chart = (
+    weekly_sales["break_even"] = 3485
+    line = (
         alt.Chart(weekly_sales.reset_index())
-        .mark_bar()
+        .mark_line(point=True)
         .encode(
-            x="date",
-            y="sales",
+            x=alt.X(
+                "date",
+                scale=alt.Scale(padding=20),
+                title="Semana",
+            ),
+            y=alt.Y(
+                "sales",
+                scale=alt.Scale(domain=[0, 5000]),
+                title="Total Vendas",
+            ),
         )
+    )
+    text = line.mark_text(
+        align="center",
+        baseline="middle",
+        dy=-10,
+    ).encode(text="sales:Q")
+    goal = (
+        alt.Chart(weekly_sales.reset_index())
+        .mark_rule(strokeDash=[12, 6], size=2)
+        .encode(
+            y="break_even",
+            color=alt.value("red"),
+            size=alt.value(2),
+        )
+    )
+    avg = (
+        alt.Chart(weekly_sales.reset_index())
+        .mark_rule(strokeDash=[12, 6], size=2)
+        .encode(
+            y="mean(sales)",
+            color=alt.value("steelblue"),
+            size=alt.value(2),
+        )
+    )
+    chart = (
+        (line + text + goal + avg)
+        .configure_axis(grid=False)
+        .configure_view(strokeWidth=0)
     )
     st.altair_chart(chart)
 
@@ -129,13 +158,13 @@ if "yasai" not in st.session_state:
 st.title("YASAI")
 option = st.sidebar.radio(
     "option",
-    ["Ver Dados", "Venda de Items Por Data", "Carregar Ficheiros"],
+    ["Ver Dados", "Lista de Compras", "Carregar Ficheiros"],
     label_visibility="hidden",
 )
 
 if option == "Ver Dados":
     kitch_show_data()
-elif option == "Venda de Items por Data":
+elif option == "Lista de Compras":
     kitch_venda_de_items()
 elif option == "Carregar Ficheiros":
     upload_kitch()
