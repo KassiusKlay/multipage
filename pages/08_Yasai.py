@@ -85,7 +85,7 @@ def kitch_show_data():
     df = pd.read_sql(
         "SELECT * FROM yasai_kitch", engine, index_col="id", parse_dates="date"
     )
-    df.sales = df.sales - df.discounts
+    df.sales = round(((df.sales - df.discounts) / 1.13), 0)
     lisbon = Point(38.7167, -9.1333)
 
     data = Daily(lisbon, df.date.min(), df.date.max())
