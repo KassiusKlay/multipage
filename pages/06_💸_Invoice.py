@@ -126,6 +126,7 @@ def process_file_df(file_df):
         pd.concat([hluz, torres, odivelas, cpp, cca], ignore_index=True)
         .sort_values(by="entrada")
         .reset_index(drop=True)
+        .dropna(subset="ano")
     )
     return df
 
