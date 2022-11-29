@@ -323,6 +323,7 @@ def upload_files():
     )
 
     if uploaded_files:
+        new_df = pd.DataFrame()
         for file in uploaded_files:
             file_df = pd.read_html(file, header=0)[0][:-1]
             unidade = file.name.split(".")[0]
@@ -343,9 +344,10 @@ def upload_files():
                 pd.to_datetime, format="%d-%m-%Y"
             )
             st.write(len(file_df))
-            st.write(len(df))
-            df = pd.concat([df, file_df, df]).drop_duplicates(keep=False)
-            st.write(len(df))
+            st.write(len(new_df))
+            new_df = pd.concat([new_df, file_df])
+            st.write(len(new_df))
+        df = pd.concat([df, new_df, df]).drop_duplicates(keep=False)
         st.write(len(df))
         st.stop()
         df.drop_duplicates(keep=False, inplace=True)
