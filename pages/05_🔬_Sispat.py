@@ -342,8 +342,9 @@ def upload_files():
             file_df[["entrada", "expedido"]] = file_df[["entrada", "expedido"]].apply(
                 pd.to_datetime, format="%d-%m-%Y"
             )
+            st.write(len(file_df))
             st.write(len(df))
-            df = pd.concat([df, file_df, df])
+            df = pd.concat([df, file_df, df]).drop_duplicates(keep=False)
             st.write(len(df))
         st.write(len(df))
         st.stop()
