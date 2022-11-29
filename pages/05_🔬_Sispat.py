@@ -343,10 +343,7 @@ def upload_files():
             file_df[["entrada", "expedido"]] = file_df[["entrada", "expedido"]].apply(
                 pd.to_datetime, format="%d-%m-%Y"
             )
-            st.write(len(file_df))
-            st.write(len(new_df))
             new_df = pd.concat([new_df, file_df])
-            st.write(len(new_df))
         df = pd.concat([df, new_df, df]).drop_duplicates(keep=False)
         st.write(df)
         df.to_sql("sispat", engine, if_exists="append", index=False)
