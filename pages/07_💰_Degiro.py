@@ -17,7 +17,6 @@ from forex_python.converter import CurrencyRates
 st.set_page_config(layout="wide")
 
 
-@st.experimental_memo
 def get_ticker_data(ticker):
     return yf.Ticker(ticker)
 
