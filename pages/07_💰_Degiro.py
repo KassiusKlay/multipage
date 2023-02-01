@@ -64,7 +64,10 @@ def get_account_overview(_api):
     )
 
     return pd.DataFrame(
-        api.get_account_overview(request=request, raw=True,)[
+        api.get_account_overview(
+            request=request,
+            raw=True,
+        )[
             "data"
         ]["cashMovements"]
     )
@@ -140,7 +143,7 @@ def process_splits_data(df):
     return df
 
 
-@st.experimental_memo
+# @st.experimental_memo
 def add_current_portfolio_data(current_portfolio):
     df = pd.DataFrame()
     for symbol in current_portfolio.symbol.unique():
@@ -151,9 +154,9 @@ def add_current_portfolio_data(current_portfolio):
                 pd.DataFrame(
                     {
                         "symbol": [symbol],
-                        "high52": [data.info["fiftyTwoWeekHigh"]],
-                        "low52": [data.info["fiftyTwoWeekLow"]],
-                        "previousClose": [data.info["previousClose"]],
+                        "high52": [data.fast_info["year_high"]],
+                        "low52": [data.fast_info["year_low"]],
+                        "previousClose": [data.fast_info["previous_close"]],
                     }
                 ),
             ],

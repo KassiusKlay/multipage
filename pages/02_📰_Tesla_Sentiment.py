@@ -21,7 +21,6 @@ def init_engine():
     )
 
 
-@st.experimental_memo
 def get_ticker_data(ticker):
     return yf.Ticker(ticker)
 

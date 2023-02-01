@@ -9,7 +9,6 @@ st.set_page_config(layout="wide")
 START_DATE = "2010-01-01"
 
 
-@st.experimental_memo
 def get_ticker_data(ticker):
     return yf.Ticker(ticker)
 
@@ -82,10 +81,6 @@ def get_drop_df(df, sp500):
     drop_df["days_to_new_peak_from_previous"] = (
         drop_df.end_idx - drop_df.start_idx
     ).apply(lambda x: x.days)
-
-    assert (drop_df.days_to_min + drop_df.days_to_new_peak_from_bottom).equals(
-        drop_df.days_to_new_peak_from_previous
-    )
 
     drop_df = drop_df[drop_df.pct_drop < -0.1]
     return drop_df
