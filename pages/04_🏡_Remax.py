@@ -16,7 +16,7 @@ def remove_accent_from_series(series):
     return series.apply(remove_accent)
 
 
-@st.experimental_singleton
+@st.cache_resource
 def init_engine():
     return create_engine(
         f"postgresql://"
@@ -31,7 +31,7 @@ def init_engine():
 engine = init_engine()
 
 
-@st.experimental_memo(ttl=6000)
+@st.cache_data(ttl=6000)
 def pd_read_sql(sql):
     return pd.read_sql(sql, engine)
 
@@ -70,7 +70,7 @@ def apply_color(x):
     return value
 
 
-@st.experimental_memo(ttl=6000)
+@st.cache_data(ttl=6000)
 def get_mean_price_m2(radio1):
     df = pd_read_sql(
         f"""
@@ -112,7 +112,7 @@ def get_mean_price_m2(radio1):
     )
 
 
-@st.experimental_memo(ttl=6000)
+@st.cache_data(ttl=6000)
 def get_map_df(radio1, radio2, radio3, radio4, radio5):
     sql = f"""
         SELECT
@@ -182,7 +182,7 @@ def get_map_df(radio1, radio2, radio3, radio4, radio5):
     return df
 
 
-@st.experimental_memo(ttl=6000)
+@st.cache_data(ttl=6000)
 def get_plot_df(radio1, radio2, radio3, radio4, radio5):
     sql = f"""
         SELECT

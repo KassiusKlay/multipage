@@ -11,7 +11,7 @@ user_hex = (
 )
 
 
-@st.experimental_singleton
+@st.cache_resource
 def init_engine():
     return create_engine(
         f"postgresql://"
@@ -45,14 +45,14 @@ def login():
         st.form_submit_button("Login", on_click=check_credentials)
 
 
-@st.experimental_memo
+@st.cache_data
 def get_stored_data():
     return pd.read_sql(
         "SELECT * FROM sispat", engine, parse_dates=["entrada", "expedido"]
     )
 
 
-@st.experimental_memo
+@st.cache_data
 def process_df(df):
     df["exame"] = df.tipo_exame.mask(
         (df.tipo_exame.str.contains("citologia", case=False))
@@ -75,7 +75,6 @@ def process_df(df):
 
 
 def plot_line(df, plot_selection):
-
     if plot_selection == "Total Mensal":
         freq = "M"
         aggregate = {"nr_exame": "sum"}
@@ -158,7 +157,6 @@ def plot_line(df, plot_selection):
 
 
 def plot_bar(df, plot_selection):
-
     if "Tempo de Resposta" in plot_selection:
         df = df[
             ~df.tipo_exame.str.contains("Aditamento")
@@ -195,9 +193,10 @@ def plot_bar(df, plot_selection):
         transform_filter = "datum.mean_nr_exame > 10"
 
     start_year, end_year = st.select_slider(
-        "",
+        "options",
         range(df.expedido.min().year, df.expedido.max().year + 1),
         value=(df.expedido.min().year, df.expedido.max().year),
+        label_visibility="collapsed",
     )
 
     df = df[df.expedido.dt.year.between(start_year, end_year)]
@@ -259,17 +258,17 @@ def main_page():
     cols = st.columns(3)
 
     data_selection = cols[0].selectbox(
-        "", ["Histologia", "Citologia", "Imuno", "Comparativos"]
+        "Tipo de Dados", ["Histologia", "Citologia", "Imuno", "Comparativos"]
     )
     if data_selection in ["Histologia", "Citologia", "Imuno"]:
-        filter_patologista = cols[1].selectbox("", lista_patologistas, 0)
+        filter_patologista = cols[1].selectbox("Patologista", lista_patologistas, 0)
         if filter_patologista != "Todos":
             df = df[df.patologista == filter_patologista]
         if data_selection in ["Histologia", "Citologia"]:
             df = df[df.exame == data_selection]
             lista_tipos_exame = df.tipo_exame.sort_values().unique().tolist()
             lista_tipos_exame.insert(0, "Todos")
-            filter_tipo_exame = cols[2].selectbox("", lista_tipos_exame, 0)
+            filter_tipo_exame = cols[2].selectbox("Tipo de Exame", lista_tipos_exame, 0)
             if filter_tipo_exame != "Todos":
                 df = df[df.tipo_exame == filter_tipo_exame]
             else:
@@ -293,7 +292,9 @@ def main_page():
             & ~df.tipo_exame.str.contains("Aut")
             & ~(df.tipo_exame == "Caso de Consulta")
         ]
-        filter_exame = cols[1].selectbox("", ["Histologia", "Citologia", "Imuno"])
+        filter_exame = cols[1].selectbox(
+            "Tipo de Dados", ["Histologia", "Citologia", "Imuno"]
+        )
         if filter_exame in ["Histologia", "Citologia"]:
             df = df[df.exame == filter_exame]
         else:
@@ -307,7 +308,9 @@ def main_page():
     if excluir_hba:
         df = df[~df.tipo_exame.str.contains("hba", case=False)]
 
-    plot_selection = st.radio("", lista_graficos, horizontal=True)
+    plot_selection = st.radio(
+        "options", lista_graficos, horizontal=True, label_visibility="collapsed"
+    )
     if data_selection == "Comparativos":
         plot_bar(df, plot_selection)
     else:
@@ -355,7 +358,9 @@ if "sispat" not in st.session_state:
     login()
     st.stop()
 
-option = st.sidebar.radio("", ["Ver Dados", "Carregar Ficheiros"])
+option = st.sidebar.radio(
+    "options", ["Ver Dados", "Carregar Ficheiros"], label_visibility="collapsed"
+)
 
 if option == "Ver Dados":
     main_page()

@@ -13,7 +13,7 @@ def get_ticker_data(ticker):
     return yf.Ticker(ticker)
 
 
-@st.experimental_memo
+@st.cache_data
 def get_drop_df(df, sp500):
     maxes = df.groupby(pd.Grouper(freq="Y")).max()
     while any(maxes.pct_change() < 0):

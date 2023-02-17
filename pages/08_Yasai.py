@@ -12,7 +12,7 @@ user_hex = (
 )
 
 
-@st.experimental_singleton
+@st.cache_resource
 def init_engine():
     return create_engine(
         f"postgresql://"

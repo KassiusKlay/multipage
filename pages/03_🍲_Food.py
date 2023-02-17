@@ -11,7 +11,7 @@ st.set_page_config(layout="wide")
 proximity_round = 2
 
 
-@st.experimental_singleton
+@st.cache_resource
 def init_engine():
     return create_engine(
         f"postgresql://"
@@ -26,7 +26,7 @@ def init_engine():
 engine = init_engine()
 
 
-@st.experimental_memo(ttl=6000)
+@st.cache_data(ttl=6000)
 def get_db_data():
     return pd.read_sql(
         """

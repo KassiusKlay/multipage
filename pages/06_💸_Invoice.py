@@ -12,7 +12,7 @@ user_hex = (
 )
 
 
-@st.experimental_singleton
+@st.cache_resource
 def init_engine():
     return create_engine(
         f"postgresql://"
@@ -69,7 +69,7 @@ def upload_files():
             st.success("Ficheiro actualizado")
         else:
             st.info("Sem entradas novas")
-        st.experimental_memo.clear()
+        st.cache_data.clear()
 
 
 def from_excel_datetime(x):
@@ -131,7 +131,7 @@ def process_file_df(file_df):
     return df
 
 
-@st.experimental_memo
+@st.cache_data
 def get_stored_data():
     return pd.read_sql(
         "SELECT * FROM honorarios", engine, parse_dates=["entrada", "expedido"]
@@ -233,7 +233,9 @@ if "invoice" not in st.session_state:
     login()
     st.stop()
 
-option = st.sidebar.radio("", ["Ver Dados", "Carregar Ficheiros"])
+option = st.sidebar.radio(
+    "options", ["Ver Dados", "Carregar Ficheiros"], label_visibility="collapsed"
+)
 
 if option == "Ver Dados":
     main_page()

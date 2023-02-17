@@ -46,7 +46,7 @@ def login():
         st.form_submit_button("Login", on_click=check_credentials)
 
 
-@st.experimental_memo
+@st.cache_data
 def get_account_overview(_api):
     today = datetime.date.today()
     from_date = AccountOverview.Request.Date(
@@ -73,7 +73,7 @@ def get_account_overview(_api):
     )
 
 
-@st.experimental_memo
+@st.cache_data
 def get_transaction_history(_api):
     today = datetime.date.today()
     from_date = TransactionsHistory.Request.Date(
@@ -99,7 +99,7 @@ def get_transaction_history(_api):
     )
 
 
-@st.experimental_memo
+@st.cache_data
 def get_update_info(_api):
     request_list = Update.RequestList()
     request_list.values.extend(
@@ -114,7 +114,7 @@ def get_update_info(_api):
     return update_dict
 
 
-@st.experimental_memo
+@st.cache_data
 def get_product_info(_api, _productsId):
     request = ProductsInfo.Request()
     request.products.extend(_productsId)
@@ -125,7 +125,7 @@ def get_product_info(_api, _productsId):
     )["data"]
 
 
-@st.experimental_memo
+@st.cache_data
 def process_splits_data(df):
     splits = df.loc[df.transactionTypeId == 101].groupby("date")
     for _, split_df in splits:
@@ -143,7 +143,7 @@ def process_splits_data(df):
     return df
 
 
-# @st.experimental_memo
+# @st.cache_data
 def add_current_portfolio_data(current_portfolio):
     df = pd.DataFrame()
     for symbol in current_portfolio.symbol.unique():
@@ -165,7 +165,7 @@ def add_current_portfolio_data(current_portfolio):
     return current_portfolio.merge(df, on="symbol")
 
 
-@st.experimental_memo
+@st.cache_data
 def get_usd_eur_exchange_rate():
     c = CurrencyRates()
     return c.get_rate("USD", "EUR")
@@ -331,7 +331,7 @@ if logout:
         del st.session_state.api
     except AttributeError:
         pass
-    st.experimental_memo.clear()
+    st.cache_data.clear()
 
 if "api" not in st.session_state:
     login()

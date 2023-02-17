@@ -9,7 +9,7 @@ st.set_page_config(layout="wide")
 START_DATE = "2010-01-01"
 
 
-@st.experimental_singleton
+@st.cache_resource
 def init_engine():
     return create_engine(
         f"postgresql://"
