@@ -105,7 +105,7 @@ smmap==5.0.0
 soupsieve==2.3.2.post1
 SQLAlchemy==1.4.40
 stack-data==0.3.0
-streamlit==1.17.0
+streamlit==1.18.1
 streamlit-folium==0.11.0
 tenacity==8.0.1
 terminado==0.15.0
