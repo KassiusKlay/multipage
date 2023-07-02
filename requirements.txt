@@ -110,7 +110,7 @@ SQLAlchemy==1.4.40
 stack-data==0.3.0
 stevedore==5.1.0
 streamlit==1.24.0
-streamlit-folium==0.12.0
+streamlit-folium==0.11.0
 tenacity==8.0.1
 terminado==0.15.0
 tinycss2==1.1.1
