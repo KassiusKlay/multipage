@@ -274,6 +274,9 @@ def show_transaction_history(transaction_df):
     df = process_splits_data(df)
     df.date = df.date.apply(pd.Timestamp)
     historical_data = yf.download(ticker)["Close"].reset_index()
+    if historical_data.empty:
+        st.warning("Sem dados")
+        return
     today = historical_data.iloc[-1].Close
     cur = get_usd_eur_exchange_rate()
     df["PL"] = df.quantity * today * cur + df.totalPlusAllFeesInBaseCurrency
