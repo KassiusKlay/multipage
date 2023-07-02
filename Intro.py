@@ -30,24 +30,6 @@ st.markdown(
      """
 )
 
-st.subheader("📰 [Tesla Sentiment](/Tesla_Sentiment)")
-
-st.markdown(
-    """
-    A Tesla é uma das empresas mais bem cotadas na bolsa e talvez por isso, ou por ter\
-            um CEO controverso, quase todos os dias saem notícias sobre a empresa.\n
-    Sempre me questionei sobre se as notícias que saiam tinham impacto no valor \
-            das acções, pelo que decidi por à prova.\n
-    Extraí todas as notícias da Tesla do site [Teslarati](https://www.teslarati.com) \
-            e sobre elas corri um algoritmo de inteligência artificial, que classifica\
-            o conteúdo em Positivo, Negativo ou Neutro.\n
-    O resultado ficou traçado no gráfico que podem consultar na app.\n
-    **Conclusão:** Com esta análise não consigo confirmar a minha suspeita. \
-            O que acham? 🤔\n
-    ---
-    """
-)
-
 st.subheader("🍲 [Food](/Food)")
 
 st.markdown(

@@ -97,6 +97,8 @@ if start_date < datetime.datetime.strptime("1993-01-29", "%Y-%m-%d").date():
     st.warning("Data invalida. Dados a partir de 1993-1-29")
     st.stop()
 
+if not ticker:
+    st.stop()
 data = get_ticker_data(ticker)
 df = data.history(start=start_date)["Close"]
 if df.empty:
@@ -136,7 +138,7 @@ for _, row in drop_df.iterrows():
     )
     layers += drop_line + drop_text
 
-st.title(f"{ticker}")
+st.title(f"{ticker} ({data.info['longName']})")
 
 chart = (
     layers.configure_view(stroke=None)
