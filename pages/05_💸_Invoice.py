@@ -65,9 +65,9 @@ def upload_files():
             st.write(final_df)
             final_df.to_sql("honorarios", engine, if_exists="append", index=False)
             st.success("Ficheiro actualizado")
+            st.cache_data.clear()
         else:
             st.info("Sem entradas novas")
-        st.cache_data.clear()
 
 
 def from_excel_datetime(x):
@@ -216,7 +216,6 @@ def pvp_por_entidade(df):
     df = df[df.tipo_exame == tipo_exame]
     df["quantidade"] = df["quantidade"].fillna(1)
     selection = alt.selection_point(fields=["entidade"], bind="legend")
-
     line = (
         alt.Chart(df)
         .transform_calculate(pvp_per_quantidade="datum.pvp / datum.quantidade")
@@ -226,7 +225,6 @@ def pvp_por_entidade(df):
                 "yearmonth(expedido)",
                 axis=alt.Axis(tickCount="month"),
             ),
-            # Calculate the mean of the new field
             y=alt.Y("mean(pvp_per_quantidade):Q", title="PVP"),
             color=alt.Color(
                 "entidade",
@@ -238,28 +236,6 @@ def pvp_por_entidade(df):
         )
         .add_params(selection)
     )
-
-    # line = (
-    # alt.Chart(df)
-    # .mark_line(point=True)
-    # .encode(
-    # x=alt.X(
-    # "yearmonth(expedido)",
-    # axis=alt.Axis(
-    # tickCount="month",
-    # ),
-    # ),
-    # y="mean(pvp)",
-    # color=alt.Color(
-    # "entidade",
-    # sort=alt.EncodingSortField("count", op="count", order="descending"),
-    # legend=alt.Legend(title="Plano por ordem de frequência"),
-    # ),
-    # tooltip="mean(pvp)",
-    # opacity=alt.condition(selection, alt.value(1.0), alt.value(0.0)),
-    # )
-    # .add_params(selection)
-    # )
     layer = (line).configure_view(strokeWidth=0).configure_axis(grid=False)
     st.altair_chart(layer, use_container_width=True)
 
@@ -270,11 +246,11 @@ def main_page():
     tab1, tab2, tab3 = st.tabs(options)
 
     with tab1:
-        check_susana(df, sispat)
+        check_susana(df.copy(), sispat.copy())
     with tab2:
-        honorarios_por_exame(df)
+        honorarios_por_exame(df.copy())
     with tab3:
-        pvp_por_entidade(df)
+        pvp_por_entidade(df.copy())
 
 
 if "invoice" not in st.session_state:
