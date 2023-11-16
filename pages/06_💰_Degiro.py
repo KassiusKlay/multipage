@@ -12,7 +12,7 @@ from degiro_connector.trading.models.trading_pb2 import (
     ProductsInfo,
     Update,
 )
-from forex_python.converter import CurrencyRates
+from currency_converter import CurrencyConverter
 
 st.set_page_config(layout="wide")
 
@@ -143,7 +143,7 @@ def process_splits_data(df):
     return df
 
 
-# @st.cache_data
+@st.cache_data
 def add_current_portfolio_data(current_portfolio):
     df = pd.DataFrame()
     for symbol in current_portfolio.symbol.unique():
@@ -167,8 +167,8 @@ def add_current_portfolio_data(current_portfolio):
 
 @st.cache_data
 def get_usd_eur_exchange_rate():
-    c = CurrencyRates()
-    return c.get_rate("USD", "EUR")
+    c = CurrencyConverter()
+    return c.convert(1, "USD", "EUR")
 
 
 def percentage(val):
@@ -181,28 +181,16 @@ def percentage(val):
     return "color: %s" % color
 
 
-def show_current_portfolio(portfolio_df, products_info):
-    current_portfolio = portfolio_df[
-        (portfolio_df["size"] > 0) & (portfolio_df.positionType == "PRODUCT")
-    ]
-    current_portfolio["symbol"] = current_portfolio.id.apply(
-        lambda x: products_info[str(x)]["symbol"]
-    )
+def show_current_portfolio(current_portfolio):
+    df = current_portfolio.copy()
+    df.plBase = df.plBase.str["EUR"].abs()
+    df["profit"] = (df.value - df.plBase) / df.plBase
 
-    current_portfolio.plBase = current_portfolio.plBase.str["EUR"].abs()
-    current_portfolio["profit"] = (
-        current_portfolio.value - current_portfolio.plBase
-    ) / current_portfolio.plBase
-
-    current_portfolio = add_current_portfolio_data(current_portfolio)
-    current_portfolio["change"] = (
-        current_portfolio.price - current_portfolio.previousClose
-    ) / current_portfolio.previousClose
-    current_portfolio["fromHigh52"] = (
-        current_portfolio.price - current_portfolio.high52
-    ) / current_portfolio.high52
-    current_portfolio = (
-        current_portfolio[
+    df = add_current_portfolio_data(df)
+    df["change"] = (df.price - df.previousClose) / df.previousClose
+    df["fromHigh52"] = (df.price - df.high52) / df.high52
+    df = (
+        df[
             [
                 "symbol",
                 "price",
@@ -222,7 +210,7 @@ def show_current_portfolio(portfolio_df, products_info):
     )
 
     styler = (
-        current_portfolio.convert_dtypes()
+        df.convert_dtypes()
         .style.applymap(percentage, subset=["profit", "change", "fromHigh52"])
         .format(
             {
@@ -240,7 +228,7 @@ def show_account_movement(account_df):
     deposits = account_df[
         (account_df.description.str.contains("Withdrawal"))
         | (account_df.description.str.contains("dep", case=False))
-    ]
+    ].copy()
     deposits.description = deposits.description.where(
         deposits.description == "Withdrawal", "Deposits"
     )
@@ -260,6 +248,25 @@ def show_account_movement(account_df):
     st.altair_chart(bar)
 
 
+@st.cache_data
+def get_historical_data(ticker):
+    historical_data = yf.download(ticker)["Close"].reset_index()
+    if historical_data.empty:
+        st.warning("Sem dados")
+        st.stop()
+    return historical_data
+
+
+@st.cache_data
+def get_comparing_df(ticker, start_date):
+    df = get_ticker_data(ticker).history(start=start_date)["Close"].reset_index()
+    df.Date = df.Date.dt.date
+    df.Date = pd.to_datetime(df.Date, utc=True)
+    last_close = df["Close"].iloc[-1]
+    df["Pct_Change_From_Last"] = ((last_close - df["Close"]) / df["Close"]) * 100
+    return df
+
+
 def show_transaction_history(transaction_df):
     tickers = transaction_df.symbol.sort_values().unique().tolist()
     tsla_index = tickers.index("TSLA")
@@ -270,13 +277,12 @@ def show_transaction_history(transaction_df):
         tsla_index,
     )
 
+    historical_data = get_historical_data(ticker)
+
     df = transaction_df[transaction_df.symbol == ticker]
     df = process_splits_data(df)
-    df.date = df.date.apply(pd.Timestamp)
-    historical_data = yf.download(ticker)["Close"].reset_index()
-    if historical_data.empty:
-        st.warning("Sem dados")
-        return
+    df.date = pd.to_datetime(df.date)
+
     today = historical_data.iloc[-1].Close
     cur = get_usd_eur_exchange_rate()
     df["PL"] = df.quantity * today * cur + df.totalPlusAllFeesInBaseCurrency
@@ -328,6 +334,35 @@ def show_transaction_history(transaction_df):
     st.altair_chart(line + circle, use_container_width=True)
 
 
+def show_potential_portfolio(transaction_df, portfolio_value):
+    df = transaction_df.copy()
+    df["date"] = df["date"].str[:10]
+    df["date"] = pd.to_datetime(df["date"], utc=True)
+
+    final = pd.DataFrame()
+    for symbol in df.symbol.unique():
+        _ = process_splits_data(df[df.symbol == symbol])
+        final = pd.concat([final, _], ignore_index=True)
+
+    i = st.text_input("Select a Ticker").upper()
+    if not i:
+        st.stop()
+
+    cols = st.columns(3)
+    for col_num, ticker in enumerate(["SPY", "QQQ", i]):
+        comparing_df = get_comparing_df(ticker, final.date.min())
+
+        df = final.merge(comparing_df, left_on="date", right_on="Date", how="left")
+        df["current_value"] = (
+            df["totalInBaseCurrency"]
+            + (df["Pct_Change_From_Last"] / 100) * df["totalInBaseCurrency"]
+        )
+        current_value = int(-df["current_value"].sum())
+        cols[col_num].metric(
+            ticker, f"{current_value}€", f"{portfolio_value - current_value}€"
+        )
+
+
 logout = st.sidebar.button("logout")
 if logout:
     try:
@@ -356,23 +391,43 @@ if "portfolio" in update_dict:
 if "total_portfolio" in update_dict:
     total_portfolio_df = pd.DataFrame(update_dict["total_portfolio"]["values"])
 
+current_portfolio = portfolio_df[
+    (portfolio_df["size"] > 0) & (portfolio_df.positionType == "PRODUCT")
+].copy()
+current_portfolio["symbol"] = current_portfolio.id.apply(
+    lambda x: products_info[str(x)]["symbol"]
+)
 
 total_deposits = total_portfolio_df.loc["EUR"].totalDepositWithdrawal
 free_cash = total_portfolio_df.loc["EUR"].totalCash
 portfolio_value = portfolio_df.value.sum()
+total_fees = transaction_df.totalFeesInBaseCurrency.abs().sum()
 
 
 st.write("Total Deposits:", total_deposits)
 st.write("Free Cash:", free_cash)
 st.write("Portfolio value:", int(portfolio_value))
+st.write("Total fees:", int(total_fees))
 
-tab1, tab2, tab3 = st.tabs(
-    ["Current Portfolio", "Account Movement", "Transaction History"]
+tab1, tab2, tab3, tab4 = st.tabs(
+    [
+        "Current Portfolio",
+        "Account Movement",
+        "Transaction History",
+        "Potential Portfolio",
+    ]
 )
 
 with tab1:
-    show_current_portfolio(portfolio_df, products_info)
+    show_current_portfolio(current_portfolio)
 with tab2:
     show_account_movement(account_df)
 with tab3:
     show_transaction_history(transaction_df)
+with tab4:
+    show_potential_portfolio(
+        transaction_df[
+            transaction_df["symbol"].isin(current_portfolio["symbol"].unique())
+        ],
+        int(portfolio_value),
+    )

@@ -49,23 +49,21 @@ def login():
 def upload_files():
     stored_df, _ = get_stored_data()
 
-    uploaded_files = st.file_uploader(
-        "",
+    uploaded_file = st.file_uploader(
+        "Carregar Ficheiro",
         type="xlsb",
-        accept_multiple_files=True,
+        accept_multiple_files=False,
     )
 
-    uploaded_df = pd.DataFrame()
-    if uploaded_files:
-        for file in uploaded_files:
-            file_df = pd.read_excel(file, None)
-            df = process_file_df(file_df)
-            uploaded_df = pd.concat([uploaded_df, df])
-        uploaded_df = pd.concat([stored_df, uploaded_df, stored_df]).drop_duplicates(
-            keep=False,
-        )
-        if not uploaded_df.empty:
-            uploaded_df.to_sql("honorarios", engine, if_exists="append", index=False)
+    if uploaded_file:
+        file_df = pd.read_excel(uploaded_file, None)
+        uploaded_df = process_file_df(file_df)
+        merged_df = pd.merge(stored_df, uploaded_df, how="outer", indicator=True)
+        final_df = merged_df[merged_df["_merge"] == "right_only"]
+        final_df = final_df.drop("_merge", axis=1)
+        if not final_df.empty:
+            st.write(final_df)
+            final_df.to_sql("honorarios", engine, if_exists="append", index=False)
             st.success("Ficheiro actualizado")
         else:
             st.info("Sem entradas novas")
@@ -77,10 +75,24 @@ def from_excel_datetime(x):
 
 
 def process_df(df):
-    df = df[::-1].reset_index(drop=True)
-    last_row = df[df["Unnamed: 0"] == "Ano"].index[0]
-    df.columns = df.iloc[last_row]
-    df = df.iloc[1:last_row]
+    df = df.dropna(axis=0, thresh=6)
+    df = df.dropna(axis=1, how="all").reset_index(drop=True)
+    if not df.columns[df.apply(lambda col: col.count() == 1)].empty:
+        df = df.loc[1:, df.apply(lambda col: col.count() != 1)]
+        if df.empty:
+            return
+    df.columns = df.iloc[0]
+    df.rename(columns={"QT": "qt imuno"}, inplace=True)
+    df = df[df["Ano"].astype(str).str.startswith("20")]
+    if (
+        "Estudo Imunocitoquímico (p/Anticorpo)" in df["Exame"].unique()
+        or "Estudo Imunocitoquímico (p/Anticorpo)" in df["Cód. Facturação"].unique()
+    ):
+        df["Exame"] = "Aditamento Imunocitoquímica"
+    else:
+        df["qt imuno"] = None
+    if "Plano SS" not in df.columns:
+        df["Plano SS"] = "Desconhecido"
     df = df[
         [
             "Ano",
@@ -93,6 +105,7 @@ def process_df(df):
             "PVP",
             "% Hon.",
             "Honorários",
+            "qt imuno",
         ]
     ]
     df.columns = [
@@ -106,13 +119,16 @@ def process_df(df):
         "pvp",
         "percentagem",
         "honorarios",
+        "quantidade",
     ]
-    st.write(df)
-    if not df.dropna().empty:
-        df[["entrada", "expedido"]] = df[["entrada", "expedido"]].applymap(
-            from_excel_datetime
-        )
-    df.honorarios = round(df.honorarios.astype(float), 3)
+    df[["entrada", "expedido"]] = df[["entrada", "expedido"]].applymap(
+        from_excel_datetime
+    )
+    df["ano"] = df["ano"].astype("int64")
+    df["nr_exame"] = df["nr_exame"].astype("int64")
+    df["pvp"] = df["pvp"].astype("float").round(3)
+    df["honorarios"] = df["honorarios"].astype("float").round(3)
+    df["percentagem"] = df["percentagem"].astype("float").round(3)
     return df
 
 
@@ -122,8 +138,9 @@ def process_file_df(file_df):
     odivelas = process_df(file_df["Actividade HLOD"])
     cca = process_df(file_df["Actividade CCA"])
     cpp = process_df(file_df["Actividade CPP"])
+    estudos = process_df(file_df["Estudos"])
     df = (
-        pd.concat([hluz, torres, odivelas, cpp, cca], ignore_index=True)
+        pd.concat([hluz, torres, odivelas, cpp, cca, estudos], ignore_index=True)
         .sort_values(by="entrada")
         .reset_index(drop=True)
         .dropna(subset="ano")
@@ -164,10 +181,17 @@ def check_susana(df, sispat):
         if diff.empty:
             st.success("Tudo contemplado")
         else:
+            st.warning("Exames não contemplados")
             st.write(diff)
+        imuno_sispat = sispat.imuno.sum()
+        imuno_susana = df[df.tipo_exame.str.contains("Aditamento")].quantidade.sum()
+        st.write("Imuno real:", imuno_sispat, "Imuno Honorarios:", imuno_susana)
 
 
 def honorarios_por_exame(df):
+    df["quantidade"] = df["quantidade"].fillna(1)
+    df["pvp"] = df["pvp"] / df["quantidade"]
+    df["honorarios"] = df["pvp"] * df["percentagem"]
     luz = df[~df.tipo_exame.str.contains("hba", case=False)]
     hba = df[df.tipo_exame.str.contains("hba", case=False)]
     cols = st.columns(2)
@@ -188,30 +212,54 @@ def pvp_por_entidade(df):
         (~df.tipo_exame.str.contains("hba", case=False))
         & ~(df.tipo_exame.str.contains("citologia", case=False))
     ]
-    selection = st.selectbox("Tipo de Exame", df.tipo_exame.sort_values().unique())
-    df = df[df.tipo_exame == selection]
-    selection = alt.selection_single(fields=["plano"], bind="legend")
+    tipo_exame = st.selectbox("Tipo de Exame", df.tipo_exame.sort_values().unique())
+    df = df[df.tipo_exame == tipo_exame]
+    df["quantidade"] = df["quantidade"].fillna(1)
+    selection = alt.selection_point(fields=["entidade"], bind="legend")
+
     line = (
         alt.Chart(df)
+        .transform_calculate(pvp_per_quantidade="datum.pvp / datum.quantidade")
         .mark_line(point=True)
         .encode(
             x=alt.X(
                 "yearmonth(expedido)",
-                axis=alt.Axis(
-                    tickCount="month",
-                ),
+                axis=alt.Axis(tickCount="month"),
             ),
-            y="mean(pvp)",
+            # Calculate the mean of the new field
+            y=alt.Y("mean(pvp_per_quantidade):Q", title="PVP"),
             color=alt.Color(
-                "plano",
-                sort=alt.EncodingSortField("count", op="mean", order="descending"),
+                "entidade",
+                sort=alt.EncodingSortField("count", op="count", order="descending"),
                 legend=alt.Legend(title="Plano por ordem de frequência"),
             ),
-            tooltip="mean(pvp)",
+            tooltip="mean(pvp_per_quantidade):Q",
             opacity=alt.condition(selection, alt.value(1.0), alt.value(0.0)),
         )
-        .add_selection(selection)
+        .add_params(selection)
     )
+
+    # line = (
+    # alt.Chart(df)
+    # .mark_line(point=True)
+    # .encode(
+    # x=alt.X(
+    # "yearmonth(expedido)",
+    # axis=alt.Axis(
+    # tickCount="month",
+    # ),
+    # ),
+    # y="mean(pvp)",
+    # color=alt.Color(
+    # "entidade",
+    # sort=alt.EncodingSortField("count", op="count", order="descending"),
+    # legend=alt.Legend(title="Plano por ordem de frequência"),
+    # ),
+    # tooltip="mean(pvp)",
+    # opacity=alt.condition(selection, alt.value(1.0), alt.value(0.0)),
+    # )
+    # .add_params(selection)
+    # )
     layer = (line).configure_view(strokeWidth=0).configure_axis(grid=False)
     st.altair_chart(layer, use_container_width=True)
 
