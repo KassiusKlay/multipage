@@ -153,7 +153,7 @@ def get_stored_data():
     return pd.read_sql(
         "SELECT * FROM honorarios", engine, parse_dates=["entrada", "expedido"]
     ), pd.read_sql(
-        "SELECT * FROM sispat WHERE sispat.patologista = 'Dr. João Cassis'",
+        "SELECT * FROM sispat",
         engine,
         parse_dates=["entrada", "expedido"],
     )
@@ -175,6 +175,7 @@ def check_susana(df, sispat):
             & (sispat.expedido.dt.month == mes)
             & ~(sispat.tipo_exame.str.contains("Aditamento"))
             & ~(sispat.tipo_exame.str.contains("Tipagem"))
+            & (sispat.patologista == "Dr. João Cassis")
         ]
         diff = list(set(sispat.nr_exame.tolist()) - set(df.nr_exame.tolist()))
         diff = sispat[sispat.nr_exame.isin(diff)]
@@ -240,10 +241,58 @@ def pvp_por_entidade(df):
     st.altair_chart(layer, use_container_width=True)
 
 
+def faturacao(df, sispat):
+    sispat = sispat[
+        (sispat.expedido >= "2022-01") & ~(sispat.tipo_exame.str.contains("Aditamento"))
+    ]
+    grouped_df = df.groupby(["tipo_exame"])["honorarios"].mean().reset_index()
+    merged_df = sispat.merge(grouped_df, on=["tipo_exame"], how="left")
+    merged_df["total_honorarios"] = merged_df.honorarios + merged_df.imuno * 12.72
+    df = merged_df[merged_df.ano >= 2022]
+
+    sum_honorarios = df.groupby("patologista")["total_honorarios"].sum().reset_index()
+    sum_honorarios["total_honorarios"] = (
+        sum_honorarios["total_honorarios"].round().astype(int)
+    )
+
+    chart = (
+        alt.Chart(sum_honorarios)
+        .mark_bar()
+        .encode(
+            x=alt.X("patologista:N", sort="-y"),
+            y="total_honorarios:Q",
+            tooltip=["patologista", "total_honorarios"],
+        )
+        .properties(width=600, height=400)
+    )
+    st.altair_chart(chart, use_container_width=True)
+
+    years = df["ano"].sort_values().unique()
+    cols = st.columns(len(years))
+    for i, year in enumerate(years):
+        df_year = df[df["ano"] == year]
+        sum_honorarios_year = (
+            df_year.groupby("patologista")["total_honorarios"].sum().reset_index()
+        )
+        chart_year = (
+            alt.Chart(sum_honorarios_year)
+            .mark_bar()
+            .encode(
+                x=alt.X("patologista:N", sort="-y"),
+                y="total_honorarios:Q",
+                tooltip=["patologista", "total_honorarios"],
+            )
+            .properties(
+                title=f"Year: {year}",
+            )
+        )
+        cols[i].altair_chart(chart_year, use_container_width=True)
+
+
 def main_page():
     df, sispat = get_stored_data()
-    options = ["Check Susana", "Honorários por Exame", "PVP por Entidade"]
-    tab1, tab2, tab3 = st.tabs(options)
+    options = ["Check Susana", "Honorários por Exame", "PVP por Entidade", "Faturação"]
+    tab1, tab2, tab3, tab4 = st.tabs(options)
 
     with tab1:
         check_susana(df.copy(), sispat.copy())
@@ -251,6 +300,8 @@ def main_page():
         honorarios_por_exame(df.copy())
     with tab3:
         pvp_por_entidade(df.copy())
+    with tab4:
+        faturacao(df.copy(), sispat.copy())
 
 
 if "invoice" not in st.session_state:
