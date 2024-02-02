@@ -139,8 +139,6 @@ for _, row in drop_df.iterrows():
     layers += drop_line + drop_text
 
 
-# st.title(f"{ticker} ({data.fast_info['longName']})")
-
 chart = (
     layers.configure_view(stroke=None)
     .configure_axisX(tickCount="year")
