@@ -216,6 +216,7 @@ def pvp(df):
     ]
     tipo_exame = st.selectbox("Tipo de Exame", df.tipo_exame.sort_values().unique())
     exam_df = df[df.tipo_exame == tipo_exame]
+    exam_df = exam_df.copy()
     exam_df["quantidade"] = exam_df["quantidade"].fillna(1)
     selection = alt.selection_point(fields=["entidade"], bind="legend")
     line = (
@@ -295,7 +296,7 @@ def pvp(df):
                     color=alt.Color("tipo_exame:N", sort=tipo_exame_order),
                     tooltip=["tipo_exame", "mean(pvp)"],
                 )
-                .properties(width=800, height=500)
+                .properties(width=1000, height=500)
             )
             # Display the title and the plot in Streamlit
             st.write(f"#### {entidade}")
