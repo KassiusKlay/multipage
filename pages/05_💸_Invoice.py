@@ -209,17 +209,17 @@ def honorarios_por_exame(df):
     )
 
 
-def pvp_por_entidade(df):
+def pvp(df):
     df = df[
         (~df.tipo_exame.str.contains("hba", case=False))
         & ~(df.tipo_exame.str.contains("citologia", case=False))
     ]
     tipo_exame = st.selectbox("Tipo de Exame", df.tipo_exame.sort_values().unique())
-    df = df[df.tipo_exame == tipo_exame]
-    df["quantidade"] = df["quantidade"].fillna(1)
+    exam_df = df[df.tipo_exame == tipo_exame]
+    exam_df["quantidade"] = exam_df["quantidade"].fillna(1)
     selection = alt.selection_point(fields=["entidade"], bind="legend")
     line = (
-        alt.Chart(df)
+        alt.Chart(exam_df)
         .transform_calculate(pvp_per_quantidade="datum.pvp / datum.quantidade")
         .mark_line(point=True)
         .encode(
@@ -240,6 +240,66 @@ def pvp_por_entidade(df):
     )
     layer = (line).configure_view(strokeWidth=0).configure_axis(grid=False)
     st.altair_chart(layer, use_container_width=True)
+
+    last_date = df["expedido"].max()
+
+    tipo_exame_order = [
+        "Histológico - biópsia (1 frasco)",
+        "Histológico - biópsia (2 frascos)",
+        "Histológico - biópsia (+ de 2 frascos)",
+    ]
+
+    # Filter for the last month of data
+    last_month_data = df[
+        (df["expedido"] > (last_date - pd.DateOffset(months=1)))
+        & (df.tipo_exame.isin(tipo_exame_order))
+    ]
+    # Group by 'entidade' and 'tipo_exame' and calculate mean of 'pvp'
+    mean_pvp = (
+        last_month_data.groupby(["entidade", "tipo_exame"])["pvp"].mean().reset_index()
+    )
+
+    # Pivot the DataFrame for easier comparison
+    pivot_mean_pvp = mean_pvp.pivot(
+        index="entidade", columns="tipo_exame", values="pvp"
+    )
+
+    # Check conditions for each 'entidade'
+    condition_met = pivot_mean_pvp.apply(
+        lambda x: x["Histológico - biópsia (1 frasco)"]
+        < x["Histológico - biópsia (2 frascos)"]
+        and x["Histológico - biópsia (2 frascos)"]
+        < x["Histológico - biópsia (+ de 2 frascos)"],
+        axis=1,
+    )
+
+    # Filter out 'entidade' where conditions are not met
+    entidade_to_plot = pivot_mean_pvp[~condition_met].index.tolist()
+    data_to_plot = mean_pvp[mean_pvp["entidade"].isin(entidade_to_plot)]
+
+    for entidade in entidade_to_plot:
+        # Filter the DataFrame for the current 'entidade'
+        data_to_plot = mean_pvp[mean_pvp["entidade"] == entidade]
+
+        # Check if the current 'entidade' has all three 'tipo_exame' before plotting
+        if data_to_plot["tipo_exame"].nunique() == len(tipo_exame_order):
+            # Create a bar plot for the current 'entidade'
+            chart = (
+                alt.Chart(data_to_plot)
+                .mark_bar()
+                .encode(
+                    x=alt.X(
+                        "tipo_exame:N", sort=tipo_exame_order, title="Tipo de Exame"
+                    ),
+                    y=alt.Y("mean(pvp):Q", title="PVP"),
+                    color=alt.Color("tipo_exame:N", sort=tipo_exame_order),
+                    tooltip=["tipo_exame", "mean(pvp)"],
+                )
+                .properties(width=800, height=500)
+            )
+            # Display the title and the plot in Streamlit
+            st.write(f"#### {entidade}")
+            st.altair_chart(chart, use_container_width=False)
 
 
 def faturacao(df, sispat):
@@ -300,7 +360,7 @@ def main_page():
     with tab2:
         honorarios_por_exame(df.copy())
     with tab3:
-        pvp_por_entidade(df.copy())
+        pvp(df.copy())
     with tab4:
         faturacao(df.copy(), sispat.copy())
 
