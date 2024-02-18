@@ -209,7 +209,7 @@ def honorarios_por_exame(df):
     )
 
 
-def pvp(df):
+def timeline_pvp(df):
     df = df[
         (~df.tipo_exame.str.contains("hba", case=False))
         & ~(df.tipo_exame.str.contains("citologia", case=False))
@@ -242,30 +242,32 @@ def pvp(df):
     layer = (line).configure_view(strokeWidth=0).configure_axis(grid=False)
     st.altair_chart(layer, use_container_width=True)
 
-    last_date = df["expedido"].max()
 
+def mean_pvp_biopsia(df):
+    last_date = df["expedido"].max()
     tipo_exame_order = [
         "Histológico - biópsia (1 frasco)",
         "Histológico - biópsia (2 frascos)",
         "Histológico - biópsia (+ de 2 frascos)",
     ]
+    colors = {
+        "Histológico - biópsia (1 frasco)": "#aee2ff",
+        "Histológico - biópsia (2 frascos)": "#6ca2de",
+        "Histológico - biópsia (+ de 2 frascos)": "#23679e",
+    }
 
-    # Filter for the last month of data
     last_month_data = df[
         (df["expedido"] > (last_date - pd.DateOffset(months=1)))
         & (df.tipo_exame.isin(tipo_exame_order))
     ]
-    # Group by 'entidade' and 'tipo_exame' and calculate mean of 'pvp'
     mean_pvp = (
         last_month_data.groupby(["entidade", "tipo_exame"])["pvp"].mean().reset_index()
     )
 
-    # Pivot the DataFrame for easier comparison
     pivot_mean_pvp = mean_pvp.pivot(
         index="entidade", columns="tipo_exame", values="pvp"
     )
 
-    # Check conditions for each 'entidade'
     condition_met = pivot_mean_pvp.apply(
         lambda x: x["Histológico - biópsia (1 frasco)"]
         < x["Histológico - biópsia (2 frascos)"]
@@ -274,33 +276,53 @@ def pvp(df):
         axis=1,
     )
 
-    # Filter out 'entidade' where conditions are not met
     entidade_to_plot = pivot_mean_pvp[~condition_met].index.tolist()
     data_to_plot = mean_pvp[mean_pvp["entidade"].isin(entidade_to_plot)]
 
     for entidade in entidade_to_plot:
-        # Filter the DataFrame for the current 'entidade'
         data_to_plot = mean_pvp[mean_pvp["entidade"] == entidade]
 
-        # Check if the current 'entidade' has all three 'tipo_exame' before plotting
         if data_to_plot["tipo_exame"].nunique() == len(tipo_exame_order):
-            # Create a bar plot for the current 'entidade'
-            chart = (
+            bar = (
                 alt.Chart(data_to_plot)
                 .mark_bar()
                 .encode(
                     x=alt.X(
-                        "tipo_exame:N", sort=tipo_exame_order, title="Tipo de Exame"
+                        "tipo_exame:N",
+                        sort=tipo_exame_order,
+                        title="Tipo de Exame",
+                        axis=alt.Axis(labelAngle=0),
                     ),
                     y=alt.Y("mean(pvp):Q", title="PVP"),
-                    color=alt.Color("tipo_exame:N", sort=tipo_exame_order),
+                    color=alt.Color(
+                        "tipo_exame:N",
+                        scale=alt.Scale(
+                            domain=list(colors.keys()), range=list(colors.values())
+                        ),
+                        legend=None,
+                    ),
                     tooltip=["tipo_exame", "mean(pvp)"],
                 )
                 .properties(width=1000, height=500)
             )
-            # Display the title and the plot in Streamlit
+            text = (
+                alt.Chart(data_to_plot)
+                .mark_text(
+                    align="center",
+                    baseline="bottom",
+                    dy=-5,
+                    color="black",
+                )
+                .encode(
+                    x=alt.X("tipo_exame:N", sort=tipo_exame_order),
+                    y=alt.Y("mean(pvp):Q", aggregate="mean"),
+                    text=alt.Text("mean(pvp):Q", format=".2f"),
+                )
+            )
             st.write(f"#### {entidade}")
-            st.altair_chart(chart, use_container_width=False)
+            st.altair_chart(
+                (bar + text).configure_axis(labelLimit=0), use_container_width=False
+            )
 
 
 def faturacao(df, sispat):
@@ -351,18 +373,35 @@ def faturacao(df, sispat):
         cols[i].altair_chart(chart_year, use_container_width=True)
 
 
+def percentage_entidades(df):
+    filtered_df = df[(~df.tipo_exame.str.contains("HBA"))]
+    percentages = (filtered_df["entidade"].value_counts(normalize=True) * 100).round(2)
+    st.write(pd.DataFrame(percentages).head(10))
+
+
 def main_page():
     df, sispat = get_stored_data()
-    options = ["Check Susana", "Honorários por Exame", "PVP por Entidade", "Faturação"]
-    tab1, tab2, tab3, tab4 = st.tabs(options)
+    options = [
+        "Check Susana",
+        "Honorários por Exame",
+        "Peso das entidades",
+        "Timeline PVP por Entidade",
+        "PVP por Biópsia",
+        "Faturação",
+    ]
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(options)
 
     with tab1:
         check_susana(df.copy(), sispat.copy())
     with tab2:
         honorarios_por_exame(df.copy())
     with tab3:
-        pvp(df.copy())
+        percentage_entidades(df.copy())
     with tab4:
+        timeline_pvp(df.copy())
+    with tab5:
+        mean_pvp_biopsia(df.copy())
+    with tab6:
         faturacao(df.copy(), sispat.copy())
 
 
