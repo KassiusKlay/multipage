@@ -4,6 +4,7 @@ import pandas as pd
 from sqlalchemy import create_engine
 import unidecode
 import numpy as np
+import altair as alt
 
 st.set_page_config(layout="wide")
 
@@ -31,9 +32,8 @@ def init_engine():
 engine = init_engine()
 
 
-@st.cache_data(ttl=6000)
-def pd_read_sql(sql):
-    return pd.read_sql(sql, engine)
+def pd_read_sql(sql, params=None):
+    return pd.read_sql(sql, con=engine, params=params)
 
 
 def show_last_updated():
@@ -47,73 +47,7 @@ def show_last_updated():
     )
 
 
-def apply_color(x):
-    alpha = 170
-    if pd.isna(x):
-        value = [0, 0, 0, alpha]
-    elif x > 0.75:
-        value = [167, 0, 0, alpha]
-    elif x > 0.5:
-        value = [255, 0, 0, alpha]
-    elif x > 0.25:
-        value = [255, 82, 82, alpha]
-    elif x > 0:
-        value = [255, 186, 186, alpha]
-    elif x < -0.75:
-        value = [0, 128, 0, alpha]
-    elif x < -0.5:
-        value = [34, 139, 34, alpha]
-    elif x < -0.25:
-        value = [50, 205, 50, alpha]
-    else:
-        value = [144, 238, 144, alpha]
-    return value
-
-
-@st.cache_data(ttl=6000)
-def get_mean_price_m2(radio1):
-    df = pd_read_sql(
-        f"""
-            SELECT
-                    listings.id, listings.listing_price,
-                    listing_types.name AS listing_type,
-                    listings."area",
-                    region1.name AS region1,
-                    region2.name AS region2,
-                    region3.name AS region3
-            FROM
-                    remax_listings listings
-            INNER JOIN remax_listing_types listing_types
-                    ON listing_types.id = listings.listing_type_id
-            INNER JOIN remax_business_types business_types
-                    ON business_types.id = listings.business_type_id
-            INNER JOIN remax_region1 region1
-                    ON region1.id = listings.region1_id
-            INNER JOIN remax_region2 region2
-                    ON region2.id = listings.region2_id
-            INNER JOIN remax_region3 region3
-                    ON region3.id = listings.region3_id
-            INNER JOIN remax_listing_dates listing_dates
-                    ON listing_dates.id = listings.id
-            WHERE
-                    business_types.name = '{radio1}'
-                    AND
-                    listing_dates.date_removed IS NULL
-                    AND
-                    listing_dates.date_sold IS NULL
-            """
-    )
-    df["price_m2"] = df.listing_price / df.area
-    df.price_m2 = df.price_m2.where(df.area != 0, None)
-    return (
-        df.groupby(["listing_type", "region1", "region2", "region3"])
-        .agg({"price_m2": "mean"})
-        .round()
-    )
-
-
-@st.cache_data(ttl=6000)
-def get_map_df(radio1, radio2, radio3, radio4, radio5):
+def get_map_df(business_type, listing_type, region1, region2, region3):
     sql = f"""
         SELECT
                 listings.id, listings.listing_price, listings.is_special,
@@ -135,95 +69,158 @@ def get_map_df(radio1, radio2, radio3, radio4, radio5):
                 ON region2.id = listings.region2_id
         INNER JOIN remax_region3 region3
                 ON region3.id = listings.region3_id
-        INNER JOIN remax_listing_dates listing_dates
-                ON listing_dates.id = listings.id
         WHERE
-                business_types.name = '{radio1}'
+                business_types.name = '{business_type}'
                 AND
-                listing_types.name = '{radio2}'
-                AND
-                listing_dates.date_sold IS NULL
-                AND
-                listing_dates.date_removed IS NULL
+                listing_types.name = '{listing_type}'
         """
-    if radio3:
-        sql = sql + f""" AND region1.name = '{radio3}'"""
-    if radio4:
-        sql = sql + f"""AND region2.name = '{radio4}'"""
-    if radio5:
-        sql = sql + f"""AND region3.name = '{radio5}'"""
+    if region1:
+        sql = sql + f""" AND region1.name = '{region1}'"""
+    if region2:
+        sql = sql + f"""AND region2.name = '{region2}'"""
+    if region3:
+        sql = sql + f"""AND region3.name = '{region3}'"""
     df = pd_read_sql(sql)
+    df = df[(df.listing_price > 0) & (df.area > 0)]
+    start_price, end_price = st.select_slider(
+        "Escolha o preço",
+        df.listing_price.sort_values(),
+        value=(df.listing_price.min(), df.listing_price.max()),
+    )
+    start_area, end_area = st.select_slider(
+        "Escolha a área", df.area.sort_values(), value=(df.area.min(), df.area.max())
+    )
+    df = df[
+        (df.listing_price >= start_price)
+        & (df.listing_price <= end_price)
+        & (df.area >= start_area)
+        & (df.area <= end_area)
+    ]
+    special = st.checkbox("Apenas Remax Collection")
+    if special:
+        df = df[df.is_special]
+    df["price_m2"] = (df.listing_price / df.area).round(0)
+    avg_price_m2 = df["price_m2"].mean()
+    df["normalized_price_m2"] = df["price_m2"].apply(
+        lambda x: (x - avg_price_m2) / avg_price_m2
+    )
 
-    df["price_m2"] = round(df.listing_price / df.area, 2)
-    df.price_m2 = df.price_m2.where(df.area != 0, None)
-    mean_price_m2 = get_mean_price_m2(radio1)
+    def get_color(price_m2):
+        if price_m2 < -0.5:
+            return [26, 150, 65]  # Dark green
+        elif price_m2 < 0:
+            return [166, 217, 106]  # Light green
+        elif price_m2 < 0.5:
+            return [239, 138, 98]  # Light red
+        else:
+            return [178, 24, 43]  # Dark red
 
-    df = df.assign(
-        delta0=list(df.listing_type),
-        delta1=list(zip(df.listing_type, df.region1)),
-        delta2=list(zip(df.listing_type, df.region1, df.region2)),
-        delta3=list(zip(df.listing_type, df.region1, df.region2, df.region3)),
-    )
-    df["avg0"] = df.delta0.map(
-        mean_price_m2.groupby("listing_type").mean().round(2)["price_m2"]
-    )
-    df["avg1"] = df.delta1.map(
-        mean_price_m2.groupby(["listing_type", "region1"]).mean().round(2)["price_m2"]
-    )
-    df["avg2"] = df.delta2.map(
-        mean_price_m2.groupby(["listing_type", "region1", "region2"])
-        .mean()
-        .round(2)["price_m2"]
-    )
-    df["avg3"] = df.delta3.map(mean_price_m2["price_m2"])
-    for i in range(4):
-        df[f"delta{i}"] = df[[f"avg{i}", "price_m2"]].pct_change(axis=1)["price_m2"]
-        df[f"color{i}"] = df[f"delta{i}"].apply(apply_color)
+    df["color"] = df["normalized_price_m2"].apply(get_color)
     return df
+
+
+def show_map(df):
+    map_style = "mapbox://styles/mapbox/light-v9"
+    view_state = pdk.ViewState(
+        latitude=df.latitude.mean(), longitude=df.longitude.mean(), zoom=9, pitch=0
+    )
+    if df.latitude.isna().sum() == len(df):
+        st.warning("Sem coordenadas disponíveis para apresentar")
+        return
+
+    df = df.replace([np.inf, -np.inf], None).fillna("--").reset_index()
+    scatter = pdk.Layer(
+        "ScatterplotLayer",
+        data=df,
+        get_position="[longitude, latitude]",
+        get_color="color",
+        get_radius="listing_price",
+        radius_scale=0.0001,
+        radius_min_pixels=2,
+        radius_max_pixels=10,
+        pickable=True,
+        autohighlight=True,
+    )
+    tooltip = {
+        "html": "<b>Index:</b> {index}</br>"
+        "<b>Preço:</b> {listing_price}</br>"
+        "<b>Preço_m2:</b> {price_m2}</br>"
+        "<b>Área:</b> {area}</br>"
+        "<b>Quartos:</b> {bedrooms}</br>"
+        "<b>Casas de Banho:</b> {bedrooms}",
+    }
+    chart = pdk.Deck(
+        map_style=map_style,
+        initial_view_state=view_state,
+        layers=[scatter],
+        tooltip=tooltip,
+    )
+    st.pydeck_chart(chart)
+    return
 
 
 @st.cache_data(ttl=6000)
-def get_plot_df(radio1, radio2, radio3, radio4, radio5):
+def show_plot(business_type, listing_type, region1, region2, region3):
+    conditions = [
+        f"business_types.name = '{business_type}'",
+        f"listing_types.name = '{listing_type}'",
+    ]
+    if region1:
+        conditions.append(f"region1.name = '{region1}'")
+    if region2:
+        conditions.append(f"region2.name = '{region2}'")
+    if region3:
+        conditions.append(f"region3.name = '{region3}'")
+
+    where_clause = " AND ".join(conditions)
+
     sql = f"""
         SELECT
-                listings.listing_price,
-                listings."area",
-                listing_dates.date_added AS date_added,
-                region1.name AS region1,
-                region2.name AS region2,
-                region3.name AS region3
+            listings.price_m2,
+            listings.date
         FROM
-                remax_listings listings
+            remax_price_m2 listings
         INNER JOIN remax_listing_types listing_types
-                ON listing_types.id = listings.listing_type_id
+            ON listing_types.id = listings.listing_type_id
         INNER JOIN remax_business_types business_types
-                ON business_types.id = listings.business_type_id
+            ON business_types.id = listings.listing_class_id
         INNER JOIN remax_region1 region1
-                ON region1.id = listings.region1_id
+            ON region1.id = listings.region1_id
         INNER JOIN remax_region2 region2
-                ON region2.id = listings.region2_id
+            ON region2.id = listings.region2_id
         INNER JOIN remax_region3 region3
-                ON region3.id = listings.region3_id
-        INNER JOIN remax_listing_dates listing_dates
-                ON listing_dates.id = listings.id
-        WHERE
-                business_types.name = '{radio1}'
-                AND
-                listing_types.name = '{radio2}'"""
-    if radio3:
-        sql = sql + f""" AND region1.name = '{radio3}'"""
-    if radio4:
-        sql = sql + f"""AND region2.name = '{radio4}'"""
-    if radio5:
-        sql = sql + f"""AND region3.name = '{radio5}'"""
+            ON region3.id = listings.region3_id
+        WHERE {where_clause}
+    """
     df = pd_read_sql(sql)
-    df["price_m2"] = df.listing_price / df.area
-    df.price_m2 = df.price_m2.where(df.area != 0, None)
-    df = df.groupby("date_added").agg({"price_m2": "mean"})
-    return df
+    df["date"] = pd.to_datetime(df["date"], dayfirst=True)
+    df = df[(df["price_m2"] >= 1)]
+    chart = (
+        alt.Chart(df)
+        .mark_line(point=True)
+        .encode(
+            x=alt.X(
+                "yearmonth(date):T",
+                title="Month",
+                axis=alt.Axis(format="%b %Y"),
+                scale=alt.Scale(padding=10),
+            ),
+            y=alt.Y("mean(price_m2):Q", title="Average Price per m²"),
+            tooltip=[
+                alt.Tooltip("yearmonth(date):T", title="Month"),
+                "mean(price_m2):Q",
+            ],
+        )
+        .properties(
+            title="Monthly Evolution of Average Price per m²",
+        )
+        .configure_view(strokeWidth=0)
+    )
+    st.altair_chart(chart, use_container_width=True)
+    return
 
 
-def variation_per_business_type():
+def show_variation_per_business_type():
     df = pd_read_sql(
         """
             SELECT total_listings, date, business_types.name AS business_type,
@@ -271,7 +268,7 @@ def variation_per_business_type():
         cols_region[2].metric("Menor oferta", region_min, delta_min)
 
 
-def get_radio_selection():
+def get_selection():
     listing_types = pd_read_sql("SELECT name FROM remax_listing_types").name.to_list()
     business_types = pd_read_sql("SELECT name FROM remax_business_types").name.to_list()
     region1 = (
@@ -280,19 +277,12 @@ def get_radio_selection():
         .to_list()
     )
     region1.insert(0, "Todos")
-    region2 = pd_read_sql("SELECT name FROM remax_region2").name.to_list()
     cols = st.columns(4)
-    radio1 = cols[0].radio("", options=business_types)
-    radio2 = cols[0].radio("", options=listing_types)
-    color_selection = cols[0].radio(
-        "Comparar preco_m2 com média:",
-        ["Nacional", "Distrito", "Concelho", "Freguesia"],
-    )
-    radio3 = cols[1].radio("", options=region1)
-    if radio3 == "Todos":
-        radio3 = None
-        radio4 = None
-        radio5 = None
+    business_type = cols[0].radio("", options=business_types)
+    listing_type = cols[0].radio("", options=listing_types)
+    region1 = cols[1].radio("", options=region1)
+    if region1 == "Todos":
+        region1 = region2 = region3 = None
     else:
         region2 = (
             pd_read_sql(
@@ -300,17 +290,16 @@ def get_radio_selection():
                 SELECT remax_region2.name FROM remax_region2
                 JOIN remax_region1
                 ON remax_region1.id = remax_region2.region1_id
-                WHERE remax_region1.name = '{radio3}'
+                WHERE remax_region1.name = '{region1}'
                 """
             )
             .name.sort_values(key=remove_accent_from_series)
             .to_list()
         )
         region2.insert(0, "Todos")
-        radio4 = cols[2].radio("", options=region2)
-        if radio4 == "Todos":
-            radio4 = None
-            radio5 = None
+        region2 = cols[2].radio("", options=region2)
+        if region2 == "Todos":
+            region2 = region3 = None
         else:
             region3 = (
                 pd_read_sql(
@@ -318,70 +307,17 @@ def get_radio_selection():
                 SELECT remax_region3.name FROM remax_region3
                 JOIN remax_region2
                 ON remax_region2.id = remax_region3.region2_id
-                WHERE remax_region2.name = '{radio4}'
+                WHERE remax_region2.name = '{region2}'
                 """
                 )
                 .name.sort_values(key=remove_accent_from_series)
                 .to_list()
             )
             region3.insert(0, "Todos")
-            radio5 = cols[3].radio("", options=region3)
-            if radio5 == "Todos":
-                radio5 = None
-    return radio1, radio2, radio3, radio4, radio5, color_selection
-
-
-def show_plot(df):
-    st.title("Preco por m2 por data de inserção")
-    st.line_chart(df)
-
-
-def show_map(df, color_selection):
-    st.title("Mapa dos resultados")
-    if color_selection == "Nacional":
-        color = "color0"
-    elif color_selection == "Distrito":
-        color = "color1"
-    elif color_selection == "Concelho":
-        color = "color2"
-    else:
-        color = "color3"
-    map_style = "mapbox://styles/mapbox/light-v9"
-    view_state = pdk.ViewState(
-        latitude=df.latitude.mean(), longitude=df.longitude.mean(), zoom=9, pitch=0
-    )
-    if df.latitude.isna().sum() == len(df):
-        st.warning("Sem coordenadas disponíveis para apresentar")
-        return
-
-    df = df.replace([np.inf, -np.inf], None).fillna("--").reset_index()
-    scatter = pdk.Layer(
-        "ScatterplotLayer",
-        data=df,
-        get_position="[longitude, latitude]",
-        get_color=color,
-        get_radius="listing_price",
-        radius_scale=0.0001,
-        radius_min_pixels=2,
-        radius_max_pixels=10,
-        pickable=True,
-        autohighlight=True,
-    )
-    tooltip = {
-        "html": "<b>Index:</b> {index}</br>"
-        "<b>Preço:</b> {listing_price}</br>"
-        "<b>Preço_m2:</b> {price_m2}</br>"
-        "<b>Área:</b> {area}</br>"
-        "<b>Quartos:</b> {bedrooms}</br>"
-        "<b>Casas de Banho:</b> {bedrooms}",
-    }
-    chart = pdk.Deck(
-        map_style=map_style,
-        initial_view_state=view_state,
-        layers=[scatter],
-        tooltip=tooltip,
-    )
-    st.pydeck_chart(chart)
+            region3 = cols[3].radio("", options=region3)
+            if region3 == "Todos":
+                region3 = None
+    return business_type, listing_type, region1, region2, region3
 
 
 def show_listing(df):
@@ -402,13 +338,6 @@ def show_listing(df):
     )
     cols = st.columns(5)
     cols[0].metric("Preço_m2", row.price_m2)
-    for i, j in zip(range(1, 5), ("Nacional", "Distrito", "Concelho", "Freguesia")):
-        cols[i].metric(
-            f"Media {j}",
-            row[f"avg{i-1}"],
-            f'{row[f"delta{i-1}"]:.0%}',
-            delta_color="inverse",
-        )
     pictures = (
         pd_read_sql(
             f"""
@@ -437,29 +366,12 @@ def filter_price_area(df, color_selection):
     start_area, end_area = st.select_slider(
         "Escolha a área", df.area.sort_values(), value=(df.area.min(), df.area.max())
     )
-    delta_selection = st.select_slider(
-        "Escolha preco_m2:",
-        ["Abaixo da média", "Todos", "Acima da média"],
-        value="Todos",
-    )
-    if color_selection == "Nacional":
-        delta = "delta0"
-    elif color_selection == "Distrito":
-        delta = "delta1"
-    elif color_selection == "Concelho":
-        delta = "delta2"
-    else:
-        delta = "delta3"
     df = df[
         (df.listing_price >= start_price)
         & (df.listing_price <= end_price)
         & (df.area >= start_area)
         & (df.area <= end_area)
     ]
-    if delta_selection == "Abaixo da média":
-        df = df[df[f"{delta}"] < 0]
-    elif delta_selection == "Acima da média":
-        df = df[df[f"{delta}"] > 0]
     special = st.checkbox("Apenas Remax Collection")
     if special:
         df = df[df.is_special]
@@ -468,20 +380,22 @@ def filter_price_area(df, color_selection):
 
 def main():
     show_last_updated()
-    variation_per_business_type()
-    (radio1, radio2, radio3, radio4, radio5, color_selection) = get_radio_selection()
-    map_df = get_map_df(radio1, radio2, radio3, radio4, radio5)
-    if not map_df.empty:
-        map_df = filter_price_area(map_df, color_selection)
+    show_variation_per_business_type()
+    (
+        business_type,
+        listing_type,
+        region1,
+        region2,
+        region3,
+    ) = get_selection()
+    # map_df = get_map_df(business_type, listing_type, region1, region2, region3)
+    # if not map_df.empty:
+    # map_df = filter_price_area(map_df, color_selection)
 
-    plot_df = get_plot_df(radio1, radio2, radio3, radio4, radio5)
-    if not plot_df.empty:
-        show_plot(plot_df)
-    st.success(f"Encontrados {len(map_df)} resultados")
-
-    if not map_df.empty:
-        show_map(map_df, color_selection)
-        show_listing(map_df)
+    show_plot(business_type, listing_type, region1, region2, region3)
+    df = get_map_df(business_type, listing_type, region1, region2, region3)
+    show_map(df)
+    show_listing(df)
 
 
 if __name__ == "__main__":

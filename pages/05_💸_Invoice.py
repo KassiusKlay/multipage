@@ -104,6 +104,7 @@ def process_df(df):
             "% Hon.",
             "Honorários",
             "qt imuno",
+            "Unidade",
         ]
     ]
     df.columns = [
@@ -118,6 +119,7 @@ def process_df(df):
         "percentagem",
         "honorarios",
         "quantidade",
+        "unidade",
     ]
     df[["entrada", "expedido"]] = df[["entrada", "expedido"]].applymap(
         from_excel_datetime
