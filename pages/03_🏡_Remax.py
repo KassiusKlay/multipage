@@ -36,6 +36,7 @@ def pd_read_sql(sql, params=None):
     return pd.read_sql(sql, con=engine, params=params)
 
 
+@st.cache_data
 def show_last_updated():
     st.write(
         "INÍCIO DOS DADOS: ",
@@ -49,23 +50,6 @@ def show_last_updated():
 
 def filter_map_df(df):
     df = df[(df.listing_price > 0) & (df.area > 0)]
-    start_price, end_price = st.select_slider(
-        "Escolha o preço",
-        df.listing_price.sort_values(),
-        value=(df.listing_price.min(), df.listing_price.max()),
-    )
-    start_area, end_area = st.select_slider(
-        "Escolha a área", df.area.sort_values(), value=(df.area.min(), df.area.max())
-    )
-    df = df[
-        (df.listing_price >= start_price)
-        & (df.listing_price <= end_price)
-        & (df.area >= start_area)
-        & (df.area <= end_area)
-    ]
-    special = st.checkbox("Apenas Remax Collection")
-    if special:
-        df = df[df.is_special]
     df["price_m2"] = (df.listing_price / df.area).round(0)
     avg_price_m2 = df["price_m2"].mean()
     df["normalized_price_m2"] = df["price_m2"].apply(
@@ -83,6 +67,32 @@ def filter_map_df(df):
             return [178, 24, 43]  # Dark red
 
     df["color"] = df["normalized_price_m2"].apply(get_color)
+
+    start_price, end_price = st.select_slider(
+        "Escolha o preço",
+        df.listing_price.sort_values(),
+        value=(df.listing_price.min(), df.listing_price.max()),
+    )
+    start_area, end_area = st.select_slider(
+        "Escolha a área", df.area.sort_values(), value=(df.area.min(), df.area.max())
+    )
+    start_price_m2, end_price_m2 = st.select_slider(
+        "Escolha o preço por m2",
+        df.price_m2.sort_values(),
+        value=(df.price_m2.min(), df.price_m2.max()),
+    )
+    df = df[
+        (df.listing_price >= start_price)
+        & (df.listing_price <= end_price)
+        & (df.area >= start_area)
+        & (df.area <= end_area)
+        & (df.price_m2 >= start_price_m2)
+        & (df.price_m2 <= end_price_m2)
+    ]
+    special = st.checkbox("Apenas Remax Collection")
+    if special:
+        df = df[df.is_special]
+
     return df.reset_index(drop=True)
 
 
