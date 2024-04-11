@@ -140,7 +140,7 @@ def process_file_df(file_df):
     torres = process_df(file_df["Actividade HLTL"])
     odivelas = process_df(file_df["Actividade HLOD"])
     cca = process_df(file_df["Actividade HLA"])
-    cpp = process_df(file_df["Actividade CPP"])
+    cpp = process_df(file_df["Actividade HLO"])
     estudos = process_df(file_df["Estudos"])
     df = (
         pd.concat([hluz, torres, odivelas, cpp, cca, estudos], ignore_index=True)
