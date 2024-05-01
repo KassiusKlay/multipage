@@ -208,8 +208,9 @@ def show_plot(business_type, listing_type, region1, region2, region3):
         WHERE {where_clause}
     """
     df = pd_read_sql(sql)
-    df["date"] = pd.to_datetime(df["date"], dayfirst=True)
+    df = df.replace([np.inf, -np.inf], None).dropna(subset="price_m2")
     df = df[(df["price_m2"] >= 1)]
+    df["date"] = pd.to_datetime(df["date"], dayfirst=True)
     chart = (
         alt.Chart(df)
         .mark_line(point=True)
@@ -394,7 +395,7 @@ def main():
     show_plot(business_type, listing_type, region1, region2, region3)
 
     df = get_map_df(business_type, listing_type, region1, region2, region3)
-    df = filter_map_df(df)
+    df = filter_map_df(df.copy())
     show_map(df)
     show_listing(df)
 
