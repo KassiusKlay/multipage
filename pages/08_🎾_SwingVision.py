@@ -194,6 +194,19 @@ def display_metrics(df):
 def plot_time_series(df):
     df.set_index("date", inplace=True)
 
+    # Define a function to determine well-placed shots
+    def well_placed_shots(row):
+        near_baseline = (
+            abs(row["bounce_y"] - court_length) < 0.3 or abs(row["bounce_y"]) < 0.3
+        )
+        near_sideline = (
+            abs(row["bounce_x"] - court_width / 2) < 0.3
+            or abs(row["bounce_x"] + court_width / 2) < 0.3
+        )
+        return near_baseline or near_sideline
+
+    df["well_placed"] = df.apply(well_placed_shots, axis=1)
+
     resampled_data = (
         df.resample("W")
         .agg(
@@ -202,13 +215,26 @@ def plot_time_series(df):
                 if len(x) > 0
                 else None,
                 "speed_kmh": "mean",
+                "spin": lambda x: (x == "Topspin").sum() / len(x) * 100
+                if len(x) > 0
+                else None,
+                "well_placed": lambda x: x.sum() / len(x) * 100 if len(x) > 0 else None,
             }
         )
-        .rename(columns={"result": "In Percentage", "speed_kmh": "Average Speed"})
+        .rename(
+            columns={
+                "result": "In Percentage",
+                "speed_kmh": "Average Speed",
+                "spin": "Topspin Percentage",
+                "well_placed": "Well Placed Percentage",
+            }
+        )
     )
 
     overall_in_percentage = (df["result"] == "In").sum() / len(df) * 100
     overall_avg_speed = df["speed_kmh"].mean()
+    overall_topspin_percentage = (df["spin"] == "Topspin").sum() / len(df) * 100
+    overall_well_placed_percentage = df["well_placed"].sum() / len(df) * 100
 
     fig = go.Figure()
 
@@ -236,6 +262,30 @@ def plot_time_series(df):
         )
     )
 
+    # Add topspin percentage line
+    fig.add_trace(
+        go.Scatter(
+            x=resampled_data.index,
+            y=resampled_data["Topspin Percentage"],
+            mode="lines+markers",
+            name="Topspin Percentage",
+            line=dict(color="red"),
+            connectgaps=True,
+        )
+    )
+
+    # Add well placed percentage line
+    fig.add_trace(
+        go.Scatter(
+            x=resampled_data.index,
+            y=resampled_data["Well Placed Percentage"],
+            mode="lines+markers",
+            name="Well Placed Percentage",
+            line=dict(color="orange"),
+            connectgaps=True,
+        )
+    )
+
     # Add overall average lines
     fig.add_shape(
         type="line",
@@ -255,6 +305,26 @@ def plot_time_series(df):
         y1=overall_avg_speed,
         line=dict(color="green", width=2, dash="dot"),
         name="Overall Average Speed",
+    )
+
+    fig.add_shape(
+        type="line",
+        x0=resampled_data.index.min(),
+        y0=overall_topspin_percentage,
+        x1=resampled_data.index.max(),
+        y1=overall_topspin_percentage,
+        line=dict(color="red", width=2, dash="dot"),
+        name="Overall Topspin Percentage",
+    )
+
+    fig.add_shape(
+        type="line",
+        x0=resampled_data.index.min(),
+        y0=overall_well_placed_percentage,
+        x1=resampled_data.index.max(),
+        y1=overall_well_placed_percentage,
+        line=dict(color="orange", width=2, dash="dot"),
+        name="Overall Well Placed Percentage",
     )
 
     fig.update_layout(
