@@ -77,7 +77,7 @@ def create_bar_chart(data, title):
             y=alt.Y("sum(amount):Q"),
             tooltip=["category", "sum(amount)"],
         )
-        .properties(width=600, height=400, title=title)
+        .properties(title=title)
     )
     st.altair_chart(chart, use_container_width=True)
 
@@ -86,7 +86,6 @@ def show_dashboard():
     st.title("Dashboard")
 
     df = get_stored_data()
-
     df = df[df["category"] != "Ignore"]
 
     personal_df = df[df["origin"] == "Personal"]
@@ -94,6 +93,43 @@ def show_dashboard():
 
     create_bar_chart(personal_df, "Personal Expenses by Category")
     create_bar_chart(company_df, "Company Expenses by Category")
+
+    # Calculate and display monthly averages for categories
+    df["month"] = df["date"].dt.to_period("M")
+    filtered_df = df[~df["category"].isin(["Income", "Investments"])]
+    monthly_totals = (
+        filtered_df.groupby(["category", "month"])["amount"].sum().reset_index()
+    )
+    monthly_averages = monthly_totals.groupby("category")["amount"].mean().reset_index()
+
+    monthly_averages_chart = (
+        alt.Chart(monthly_averages)
+        .mark_bar()
+        .encode(
+            x=alt.X(
+                "category:N",
+                sort=alt.EncodingSortField(
+                    field="amount", op="mean", order="descending"
+                ),
+            ),
+            y="amount:Q",
+            tooltip=["category", "amount"],
+        )
+        .properties(
+            title="Average Monthly Spend by Category (Excluding Income and Investments)",
+        )
+    )
+    st.altair_chart(monthly_averages_chart, use_container_width=True)
+
+    # Calculate and display percentage of investments in relation to income
+    total_investments = df[df["category"] == "Investments"]["amount"].sum()
+    total_income = df[df["category"] == "Income"]["amount"].sum()
+    if total_income != 0:
+        investments_percentage = (total_investments / total_income) * 100
+    else:
+        investments_percentage = 0
+
+    st.metric("Investments as % of Income", f"{investments_percentage:.2f}%")
 
 
 @st.cache_data
