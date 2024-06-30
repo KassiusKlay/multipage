@@ -3,15 +3,23 @@ import pandas as pd
 import datetime
 import altair as alt
 import yfinance as yf
-import degiro_connector.core.helpers.pb_handler as pb_handler
 from degiro_connector.trading.api import API as TradingAPI
-from degiro_connector.trading.models.trading_pb2 import (
-    Credentials,
-    AccountOverview,
-    TransactionsHistory,
-    ProductsInfo,
-    Update,
+from degiro_connector.trading.models.credentials import Credentials
+from degiro_connector.trading.models.account import (
+    OverviewRequest,
+    UpdateOption,
+    UpdateRequest,
 )
+from degiro_connector.trading.models.transaction import HistoryRequest
+
+
+# from degiro_connector.trading.models.trading_pb2 import (
+# Credentials,
+# AccountOverview,
+# TransactionsHistory,
+# ProductsInfo,
+# Update,
+# )
 from currency_converter import CurrencyConverter
 
 st.set_page_config(layout="wide")
@@ -48,24 +56,20 @@ def login():
 
 @st.cache_data
 def get_account_overview(_api):
-    today = datetime.date.today()
-    from_date = AccountOverview.Request.Date(
-        year=2017,
-        month=1,
-        day=1,
-    )
-    to_date = AccountOverview.Request.Date(
-        year=today.year, month=today.month, day=today.day
-    )
-
-    request = AccountOverview.Request(
-        from_date=from_date,
-        to_date=to_date,
+    request = OverviewRequest(
+        from_date=(
+            datetime.date(
+                year=2017,
+                month=1,
+                day=1,
+            )
+        ),
+        to_date=datetime.date.today(),
     )
 
     return pd.DataFrame(
         api.get_account_overview(
-            request=request,
+            overview_request=request,
             raw=True,
         )[
             "data"
@@ -75,52 +79,39 @@ def get_account_overview(_api):
 
 @st.cache_data
 def get_transaction_history(_api):
-    today = datetime.date.today()
-    from_date = TransactionsHistory.Request.Date(
-        year=2017,
-        month=1,
-        day=1,
-    )
-    to_date = TransactionsHistory.Request.Date(
-        year=today.year,
-        month=today.month,
-        day=today.day,
-    )
-    request = TransactionsHistory.Request(
-        from_date=from_date,
-        to_date=to_date,
-    )
-
     return pd.DataFrame(
         _api.get_transactions_history(
-            request=request,
+            transaction_request=HistoryRequest(
+                from_date=datetime.date(year=2017, month=1, day=1),
+                to_date=datetime.date.today(),
+            ),
             raw=True,
         )["data"]
     )
 
 
 @st.cache_data
-def get_update_info(_api):
-    request_list = Update.RequestList()
-    request_list.values.extend(
-        [
-            Update.Request(option=Update.Option.PORTFOLIO, last_updated=0),
-            Update.Request(option=Update.Option.TOTALPORTFOLIO, last_updated=0),
-        ]
+def get_account_update(_api):
+    account_update = _api.get_update(
+        request_list=[
+            UpdateRequest(
+                option=UpdateOption.PORTFOLIO,
+                last_update=0,
+            ),
+            UpdateRequest(
+                option=UpdateOption.TOTAL_PORTFOLIO,
+                last_update=0,
+            ),
+        ],
+        raw=False,
     )
-
-    update = api.get_update(request_list=request_list, raw=False)
-    update_dict = pb_handler.message_to_dict(message=update)
-    return update_dict
+    return account_update
 
 
 @st.cache_data
-def get_product_info(_api, _productsId):
-    request = ProductsInfo.Request()
-    request.products.extend(_productsId)
-
+def get_products_info(_api, _productsIds):
     return _api.get_products_info(
-        request=request,
+        product_list=_productsIds,
         raw=True,
     )["data"]
 
@@ -230,7 +221,10 @@ def show_account_movement(account_df):
         | (account_df.description.str.contains("dep", case=False))
     ].copy()
     deposits.description = deposits.description.where(
-        deposits.description == "Withdrawal", "Deposits"
+        deposits.description.str.contains("Withdrawal"), "Deposits"
+    )
+    deposits.description = deposits.description.mask(
+        deposits.description.str.contains("Withdrawal"), "Withdrawal"
     )
 
     bar = (
@@ -334,6 +328,26 @@ def show_transaction_history(transaction_df):
     st.altair_chart(line + circle, use_container_width=True)
 
 
+def get_portfolio_df(info):
+    columns = set()
+    for item in info:
+        for val in item["value"]:
+            columns.add(val["name"])
+    data = []
+    for item in info:
+        row = {}
+        for col in columns:
+            for val in item["value"]:
+                if val["name"] == col:
+                    row[col] = val.get("value", None)
+                    break
+            else:
+                row[col] = None
+        data.append(row)
+    df = pd.DataFrame(data, columns=list(columns))
+    return df
+
+
 def show_potential_portfolio(transaction_df, portfolio_value):
     df = transaction_df.copy()
     df["date"] = df["date"].str[:10]
@@ -378,18 +392,16 @@ if "api" not in st.session_state:
 api = st.session_state.api
 account_df = get_account_overview(api)
 transaction_df = get_transaction_history(api)
-products_info = get_product_info(api, transaction_df.productId.unique())
+products_info = get_products_info(api, transaction_df.productId.unique().tolist())
 transaction_df.insert(
     loc=3,
     column="symbol",
     value=transaction_df.productId.apply(lambda x: products_info[str(x)]["symbol"]),
 )
 
-update_dict = get_update_info(api)
-if "portfolio" in update_dict:
-    portfolio_df = pd.DataFrame(update_dict["portfolio"]["values"])
-if "total_portfolio" in update_dict:
-    total_portfolio_df = pd.DataFrame(update_dict["total_portfolio"]["values"])
+account_update = get_account_update(api)
+portfolio_df = get_portfolio_df(account_update.portfolio["value"])
+total_portfolio_df = pd.DataFrame(account_update.total_portfolio["value"])
 
 current_portfolio = portfolio_df[
     (portfolio_df["size"] > 0) & (portfolio_df.positionType == "PRODUCT")
@@ -397,9 +409,11 @@ current_portfolio = portfolio_df[
 current_portfolio["symbol"] = current_portfolio.id.apply(
     lambda x: products_info[str(x)]["symbol"]
 )
-
-total_deposits = total_portfolio_df.loc["EUR"].totalDepositWithdrawal
-free_cash = total_portfolio_df.loc["EUR"].totalCash
+total_portfolio_df = total_portfolio_df.drop(columns=["isAdded"])
+total_portfolio_df = total_portfolio_df.set_index("name")
+total_portfolio_df = total_portfolio_df.T
+total_deposits = total_portfolio_df.totalDepositWithdrawal.squeeze()
+free_cash = total_portfolio_df.totalCash.squeeze()
 portfolio_value = portfolio_df.value.sum()
 total_fees = transaction_df.totalFeesInBaseCurrency.abs().sum()
 
