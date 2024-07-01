@@ -335,7 +335,7 @@ def plot_time_series(df):
         legend_traceorder="normal",
     )
 
-    st.plotly_chart(fig)
+    st.plotly_chart(fig, use_container_width=True)
 
 
 def process_df(df):
@@ -366,11 +366,11 @@ def process_df(df):
 
 def add_filters(df):
     filter_options = [
+        {"label": "Select Session", "column": "description"},
         {"label": "Select Stroke", "column": "stroke"},
         {"label": "Select Spin", "column": "spin"},
         {"label": "Select Hit Zone", "column": "hit_zone"},
         {"label": "Select Direction", "column": "direction"},
-        {"label": "Select Session", "column": "description"},
     ]
 
     filters = {}
@@ -393,15 +393,15 @@ def main_page():
     df = process_df(df)
     df = add_filters(df)
 
-    col1, col2, col3 = st.columns([2, 2, 1])
+    col1, col2 = st.columns([2, 1])
+
+    # with col1:
+    # draw_tennis_court(df)
 
     with col1:
-        draw_tennis_court(df)
-
-    with col2:
         plot_time_series(df)
 
-    with col3:
+    with col2:
         display_metrics(df)
 
 
