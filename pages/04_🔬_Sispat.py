@@ -125,7 +125,10 @@ def plot_line(df, plot_selection):
                 scale=alt.Scale(padding=20),
             ),
             y=y_axis,
-            tooltip=alt.Text(y_axis, format=text_format),
+            tooltip=[
+                alt.Text(x_axis, format="%b-%Y"),
+                alt.Text(y_axis, format=text_format),
+            ],
         )
     )
 

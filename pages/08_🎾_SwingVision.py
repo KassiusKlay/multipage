@@ -407,6 +407,10 @@ def main_page():
 
 def upload_files():
     df = get_stored_data()
+    last_row = df.loc[df["date"].idxmax()]
+    st.write("### Latest Event")
+    st.write(f"**Date:** {last_row['date'].date()}")
+    st.write(f"**Description:** {last_row['description']}")
     df = df.drop(columns=["id"])
     uploaded_files = st.file_uploader(
         "Choose an Excel file", type="xlsx", accept_multiple_files=True
