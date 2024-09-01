@@ -96,12 +96,32 @@ def show_dashboard():
 
     # Calculate and display monthly averages for categories
     df["month"] = df["date"].dt.to_period("M")
+
+    # Filter out "Income" and "Investments" categories
     filtered_df = df[~df["category"].isin(["Income", "Investments"])]
-    monthly_totals = (
-        filtered_df.groupby(["category", "month"])["amount"].sum().reset_index()
+
+    # Get the full range of months
+    all_months = pd.period_range(
+        start=df["month"].min(), end=df["month"].max(), freq="M"
     )
+
+    # Create a DataFrame with all categories and all months
+    full_index = pd.MultiIndex.from_product(
+        [filtered_df["category"].unique(), all_months], names=["category", "month"]
+    )
+
+    # Reindex the filtered DataFrame to include all months for each category, filling missing values with 0
+    monthly_totals = (
+        filtered_df.groupby(["category", "month"])["amount"]
+        .sum()
+        .reindex(full_index, fill_value=0)
+        .reset_index()
+    )
+
+    # Calculate the monthly average for each category across all months
     monthly_averages = monthly_totals.groupby("category")["amount"].mean().reset_index()
 
+    # Plot the chart
     monthly_averages_chart = (
         alt.Chart(monthly_averages)
         .mark_bar()
