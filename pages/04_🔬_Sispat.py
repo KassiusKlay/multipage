@@ -64,7 +64,7 @@ def process_df(df):
 
     df = (
         df.groupby(
-            [pd.Grouper(key="expedido", freq="M"), "exame", "tipo_exame", "patologista"]
+            [pd.Grouper(key="expedido", freq="ME"), "exame", "tipo_exame", "patologista"]
         )
         .agg({"nr_exame": "count", "imuno": "sum", "tempo_de_resposta": "mean"})
         .reset_index()
@@ -74,7 +74,7 @@ def process_df(df):
 
 def plot_line(df, plot_selection):
     if plot_selection == "Total Mensal":
-        freq = "M"
+        freq = "ME"
         aggregate = {"nr_exame": "sum"}
         x_axis = "yearmonth(expedido):T"
         y_axis = "nr_exame"
@@ -83,7 +83,7 @@ def plot_line(df, plot_selection):
         tick_count = {"interval": "month", "step": 6}
 
     elif plot_selection == "Total Anual":
-        freq = "Y"
+        freq = "YE"
         aggregate = {"nr_exame": "sum"}
         x_axis = "year(expedido):T"
         y_axis = "nr_exame"
@@ -92,7 +92,7 @@ def plot_line(df, plot_selection):
         tick_count = "year"
 
     elif plot_selection == "Media Mensal / Ano":
-        freq = "M"
+        freq = "ME"
         aggregate = {"nr_exame": "sum"}
         x_axis = "year(expedido):T"
         y_axis = y_axis_mean = "mean(nr_exame)"
@@ -106,7 +106,7 @@ def plot_line(df, plot_selection):
                 & (df.expedido.dt.to_period("M") == "2022-05")
             )
         ]
-        freq = "M"
+        freq = "ME"
         aggregate = {"tempo_de_resposta": "mean"}
         x_axis = "year(expedido):T"
         y_axis = y_axis_mean = "mean(tempo_de_resposta)"
@@ -202,7 +202,7 @@ def plot_bar(df, plot_selection):
 
     df = df[df.expedido.dt.year.between(start_year, end_year)]
 
-    df = df.groupby([pd.Grouper(key="expedido", freq="M"), "patologista"]).agg(
+    df = df.groupby([pd.Grouper(key="expedido", freq="ME"), "patologista"]).agg(
         aggregate
     )
     total = df.groupby("expedido").agg(aggregate)
@@ -321,7 +321,7 @@ def main_page():
 def upload_files():
     df = get_stored_data()
     uploaded_files = st.file_uploader(
-        "",
+        "Select files to upload",
         type="xls",
         accept_multiple_files=True,
     )
@@ -358,6 +358,9 @@ def upload_files():
 if "logged_in" not in st.session_state:
     login()
     st.stop()
+
+if st.sidebar.button('Clear Cache'):
+    get_stored_data.clear() 
 
 option = st.sidebar.radio(
     "options", ["Ver Dados", "Carregar Ficheiros"], label_visibility="collapsed"

@@ -15,7 +15,7 @@ def get_ticker_data(ticker):
 
 @st.cache_data
 def get_drop_df(df, sp500):
-    maxes = df.groupby(pd.Grouper(freq="Y")).max()
+    maxes = df.groupby(pd.Grouper(freq="YE")).max()
     while any(maxes.pct_change() < 0):
         maxes = maxes[~(maxes.pct_change() < 0)]
     years = maxes.index.year.unique()

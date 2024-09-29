@@ -11,15 +11,6 @@ from degiro_connector.trading.models.account import (
     UpdateRequest,
 )
 from degiro_connector.trading.models.transaction import HistoryRequest
-
-
-# from degiro_connector.trading.models.trading_pb2 import (
-# Credentials,
-# AccountOverview,
-# TransactionsHistory,
-# ProductsInfo,
-# Update,
-# )
 from currency_converter import CurrencyConverter
 
 st.set_page_config(layout="wide")
@@ -242,7 +233,6 @@ def show_account_movement(account_df):
     st.altair_chart(bar)
 
 
-@st.cache_data
 def get_historical_data(ticker):
     historical_data = yf.download(ticker)["Close"].reset_index()
     if historical_data.empty:
@@ -256,8 +246,6 @@ def get_comparing_df(ticker, start_date):
     df = get_ticker_data(ticker).history(start=start_date)["Close"].reset_index()
     df.Date = df.Date.dt.date
     df.Date = pd.to_datetime(df.Date, utc=True)
-    last_close = df["Close"].iloc[-1]
-    df["Pct_Change_From_Last"] = ((last_close - df["Close"]) / df["Close"]) * 100
     return df
 
 
@@ -365,15 +353,13 @@ def show_potential_portfolio(transaction_df, portfolio_value):
     cols = st.columns(3)
     for col_num, ticker in enumerate(["SPY", "QQQ", i]):
         comparing_df = get_comparing_df(ticker, final.date.min())
-
         df = final.merge(comparing_df, left_on="date", right_on="Date", how="left")
-        df["current_value"] = (
-            df["totalInBaseCurrency"]
-            + (df["Pct_Change_From_Last"] / 100) * df["totalInBaseCurrency"]
-        )
-        current_value = int(-df["current_value"].sum())
+        df['Alt_Shares'] = df.apply(lambda row: -row['total'] / row['Close'], axis=1)
+        total_shares = df['Alt_Shares'].sum()
+        current_price = comparing_df.iloc[-1]['Close']
+        current_value = total_shares * current_price
         cols[col_num].metric(
-            ticker, f"{current_value}€", f"{portfolio_value - current_value}€"
+                ticker, f"{current_value:.0f}€", f"{portfolio_value - current_value:.0f}€"
         )
 
 
