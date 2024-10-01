@@ -211,13 +211,13 @@ def plot_time_series(df):
         df.resample("W")
         .agg(
             {
-                "result": lambda x: (x == "In").sum() / len(x) * 100
-                if len(x) > 0
-                else None,
+                "result": lambda x: (
+                    (x == "In").sum() / len(x) * 100 if len(x) > 0 else None
+                ),
                 "speed_kmh": "mean",
-                "spin": lambda x: (x == "Topspin").sum() / len(x) * 100
-                if len(x) > 0
-                else None,
+                "spin": lambda x: (
+                    (x == "Topspin").sum() / len(x) * 100 if len(x) > 0 else None
+                ),
                 "well_placed": lambda x: x.sum() / len(x) * 100 if len(x) > 0 else None,
             }
         )
@@ -423,11 +423,13 @@ def upload_files():
                 file_df = pd.read_excel(file, sheet_name="Shots")
             except ValueError:
                 st.error("The 'Shots' sheet is not present in the uploaded Excel file.")
-            file_df["date"] = pd.to_datetime(date, dayfirst=True)
+            file_df["date"] = pd.to_datetime(date, format="%Y-%m-%d")
             file_df["description"] = description
             new_df = pd.concat([new_df, file_df])
         new_df.columns = df.columns
-        new_df["start_time"] = pd.to_datetime(new_df["start_time"]).dt.time
+        new_df["start_time"] = pd.to_datetime(
+            new_df["start_time"], format="%H:%M:%S"
+        ).dt.time
         df = pd.concat([df, new_df, df])
         df = df.drop_duplicates(keep=False)
         if not df.empty:
