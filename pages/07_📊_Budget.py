@@ -198,7 +198,7 @@ def process_tsv(file, file_type):
     df = df[1:]
     df.columns = ["date", "description", "amount"]
     try:
-        df.date = pd.to_datetime(df.date, dayfirst=True)
+        df.date = pd.to_datetime(df.date)
     except ParserError:
         st.warning("Ficheiro Inválido")
         st.stop()
