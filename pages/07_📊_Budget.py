@@ -193,13 +193,18 @@ def process_tsv(file, file_type):
         columns_to_keep = [df.columns[i] for i in [1, 2, 3]]
 
     df = df[columns_to_keep]
-    df = df.applymap(replace_empty_with_none)
+    df = df.map(replace_empty_with_none)
     df = df.dropna(axis=0)
     df = df[1:]
     df.columns = ["date", "description", "amount"]
     try:
-        df.date = pd.to_datetime(df.date)
-    except ParserError:
+        if file_type == "Personal Debit" or file_type == "Personal Credit":
+            df.date = pd.to_datetime(df.date, dayfirst=True)
+        elif file_type == "Company Debit":
+            df.date = pd.to_datetime(df.date, format="%Y/%m/%d")
+        elif file_type == "Company Credit":
+            df.date = pd.to_datetime(df.date, format="%Y-%m-%d")
+    except Exception:
         st.warning("Ficheiro Inválido")
         st.stop()
     df["amount"] = df["amount"].str.replace(".", "", regex=False)
