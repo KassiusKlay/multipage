@@ -121,9 +121,7 @@ def process_df(df):
         "quantidade",
         "unidade",
     ]
-    df[["entrada", "expedido"]] = df[["entrada", "expedido"]].applymap(
-        from_excel_datetime
-    )
+    df[["entrada", "expedido"]] = df[["entrada", "expedido"]].map(from_excel_datetime)
     df["ano"] = df["ano"].astype("int64")
     df["nr_exame"] = df["nr_exame"].astype("int64")
     df["pvp"] = df["pvp"].astype("float").round(3)
