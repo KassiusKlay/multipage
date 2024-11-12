@@ -64,7 +64,7 @@ six==1.16.0
 smmap==5.0.1
 soupsieve==2.6
 SQLAlchemy==2.0.35
-streamlit==1.38.0
+streamlit==1.40.1
 streamlit_folium==0.22.1
 tenacity==8.5.0
 toml==0.10.2
