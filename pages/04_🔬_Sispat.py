@@ -345,7 +345,7 @@ def upload_files():
                 ["ano", "nr_exame", "imuno"]
             ].astype(int)
             file_df[["entrada", "expedido"]] = file_df[["entrada", "expedido"]].apply(
-                pd.to_datetime, format="%d-%m-%Y"
+                pd.to_datetime, format="%d/%m/%Y"
             )
             new_df = pd.concat([new_df, file_df])
         df = pd.concat([df, new_df, df]).drop_duplicates(keep=False)
