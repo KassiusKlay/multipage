@@ -5,28 +5,12 @@ from PIL import Image
 from io import BytesIO
 from folium.plugins import MarkerCluster
 import pandas as pd
-from sqlalchemy import create_engine
+from db import engine
 
-st.set_page_config(layout="wide")
 proximity_round = 2
 
 
-@st.cache_resource
-def init_engine():
-    return create_engine(
-        f"postgresql://"
-        f'{st.secrets["postgres"]["user"]}:'
-        f'{st.secrets["postgres"]["password"]}@'
-        f'{st.secrets["postgres"]["host"]}:'
-        f'{st.secrets["postgres"]["port"]}/'
-        f'{st.secrets["postgres"]["dbname"]}',
-    )
-
-
-engine = init_engine()
-
-
-@st.cache_data(ttl=6000)
+@st.cache_data(ttl=600)
 def get_db_data():
     return pd.read_sql(
         """

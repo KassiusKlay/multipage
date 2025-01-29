@@ -1,25 +1,8 @@
 import streamlit as st
 import pandas as pd
-from sqlalchemy import create_engine
 import altair as alt
 import bcrypt
-
-st.set_page_config(layout="wide")
-
-
-@st.cache_resource
-def init_engine():
-    return create_engine(
-        f"postgresql://"
-        f'{st.secrets["postgres"]["user"]}:'
-        f'{st.secrets["postgres"]["password"]}@'
-        f'{st.secrets["postgres"]["host"]}:'
-        f'{st.secrets["postgres"]["port"]}/'
-        f'{st.secrets["postgres"]["dbname"]}',
-    )
-
-
-engine = init_engine()
+from db import engine
 
 
 def check_credentials():
@@ -64,7 +47,12 @@ def process_df(df):
 
     df = (
         df.groupby(
-            [pd.Grouper(key="expedido", freq="ME"), "exame", "tipo_exame", "patologista"]
+            [
+                pd.Grouper(key="expedido", freq="ME"),
+                "exame",
+                "tipo_exame",
+                "patologista",
+            ]
         )
         .agg({"nr_exame": "count", "imuno": "sum", "tempo_de_resposta": "mean"})
         .reset_index()
@@ -359,8 +347,8 @@ if "logged_in" not in st.session_state:
     login()
     st.stop()
 
-if st.sidebar.button('Clear Cache'):
-    get_stored_data.clear() 
+if st.sidebar.button("Clear Cache"):
+    get_stored_data.clear()
 
 option = st.sidebar.radio(
     "options", ["Ver Dados", "Carregar Ficheiros"], label_visibility="collapsed"

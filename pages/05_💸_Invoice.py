@@ -1,26 +1,9 @@
 import streamlit as st
 import pandas as pd
-from sqlalchemy import create_engine
 import altair as alt
 import xlrd
 import bcrypt
-
-st.set_page_config(layout="wide")
-
-
-@st.cache_resource
-def init_engine():
-    return create_engine(
-        f"postgresql://"
-        f'{st.secrets["postgres"]["user"]}:'
-        f'{st.secrets["postgres"]["password"]}@'
-        f'{st.secrets["postgres"]["host"]}:'
-        f'{st.secrets["postgres"]["port"]}/'
-        f'{st.secrets["postgres"]["dbname"]}',
-    )
-
-
-engine = init_engine()
+from db import engine
 
 
 def check_credentials():

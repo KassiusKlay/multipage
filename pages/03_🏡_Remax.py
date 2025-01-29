@@ -1,12 +1,10 @@
 import pydeck as pdk
 import streamlit as st
 import pandas as pd
-from sqlalchemy import create_engine
 import unidecode
 import numpy as np
 import altair as alt
-
-st.set_page_config(layout="wide")
+from db import engine
 
 
 def remove_accent(string):
@@ -15,21 +13,6 @@ def remove_accent(string):
 
 def remove_accent_from_series(series):
     return series.apply(remove_accent)
-
-
-@st.cache_resource
-def init_engine():
-    return create_engine(
-        f"postgresql://"
-        f'{st.secrets["postgres"]["user"]}:'
-        f'{st.secrets["postgres"]["password"]}@'
-        f'{st.secrets["postgres"]["host"]}:'
-        f'{st.secrets["postgres"]["port"]}/'
-        f'{st.secrets["postgres"]["dbname"]}',
-    )
-
-
-engine = init_engine()
 
 
 def pd_read_sql(sql, params=None):

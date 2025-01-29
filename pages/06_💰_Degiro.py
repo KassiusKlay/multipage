@@ -13,8 +13,6 @@ from degiro_connector.trading.models.account import (
 from degiro_connector.trading.models.transaction import HistoryRequest
 from currency_converter import CurrencyConverter
 
-st.set_page_config(layout="wide")
-
 
 def get_ticker_data(ticker):
     return yf.Ticker(ticker)
@@ -109,18 +107,19 @@ def get_products_info(_api, _productsIds):
 
 @st.cache_data
 def process_splits_data(df):
+    df = df.copy()  # Ensure a copy is used to avoid SettingWithCopyWarning
     splits = df.loc[df.transactionTypeId == 101].groupby("date")
     for _, split_df in splits:
         split_factor = (
             split_df.loc[split_df.buysell == "S"].price.iloc[0]
             / split_df.loc[split_df.buysell == "B"].price.iloc[0]
         )
-        df.price = df.price.where(
-            df.date > split_df.date.iloc[0], df.price / split_factor
-        )
-        df.quantity = df.quantity.where(
-            df.date > split_df.date.iloc[0], df.quantity * split_factor
-        )
+        df.loc[df.date <= split_df.date.iloc[0], "price"] /= split_factor
+        df.loc[df.date <= split_df.date.iloc[0], "quantity"] = (
+            df.loc[df.date <= split_df.date.iloc[0], "quantity"] * split_factor
+        ).astype(
+            int
+        )  # Ensure dtype compatibility
         df = pd.concat([df, split_df]).drop_duplicates(subset="id", keep=False)
     return df
 
@@ -193,7 +192,9 @@ def show_current_portfolio(current_portfolio):
 
     styler = (
         df.convert_dtypes()
-        .style.applymap(percentage, subset=["profit", "change", "fromHigh52"])
+        .style.map(
+            percentage, subset=["profit", "change", "fromHigh52"]
+        )  # Updated to use .map instead of .applymap
         .format(
             {
                 "profit": "{:+.1%}",
@@ -354,12 +355,12 @@ def show_potential_portfolio(transaction_df, portfolio_value):
     for col_num, ticker in enumerate(["SPY", "QQQ", i]):
         comparing_df = get_comparing_df(ticker, final.date.min())
         df = final.merge(comparing_df, left_on="date", right_on="Date", how="left")
-        df['Alt_Shares'] = df.apply(lambda row: -row['total'] / row['Close'], axis=1)
-        total_shares = df['Alt_Shares'].sum()
-        current_price = comparing_df.iloc[-1]['Close']
+        df["Alt_Shares"] = df.apply(lambda row: -row["total"] / row["Close"], axis=1)
+        total_shares = df["Alt_Shares"].sum()
+        current_price = comparing_df.iloc[-1]["Close"]
         current_value = total_shares * current_price
         cols[col_num].metric(
-                ticker, f"{current_value:.0f}€", f"{portfolio_value - current_value:.0f}€"
+            ticker, f"{current_value:.0f}€", f"{portfolio_value - current_value:.0f}€"
         )
 
 

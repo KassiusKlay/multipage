@@ -4,8 +4,6 @@ import pandas as pd
 import altair as alt
 import datetime
 
-st.set_page_config(layout="wide")
-
 START_DATE = "2010-01-01"
 
 

@@ -1,29 +1,14 @@
 import streamlit as st
 import pandas as pd
-from sqlalchemy import create_engine
 import re
 import plotly.graph_objects as go
+from db import engine
 
 st.set_page_config(layout="wide")
 
 court_length = 23.77  # meters
 court_width = 8.23  # meters
 doubles_court_width = 10.97  # meters
-
-
-@st.cache_resource
-def init_engine():
-    return create_engine(
-        f"postgresql://"
-        f'{st.secrets["postgres"]["user"]}:'
-        f'{st.secrets["postgres"]["password"]}@'
-        f'{st.secrets["postgres"]["host"]}:'
-        f'{st.secrets["postgres"]["port"]}/'
-        f'{st.secrets["postgres"]["dbname"]}',
-    )
-
-
-engine = init_engine()
 
 
 @st.cache_data
