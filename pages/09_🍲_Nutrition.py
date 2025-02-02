@@ -14,10 +14,7 @@ OPENAI_API_KEY = st.secrets["api-keys"]["openai-api-key"]
 def extract_text_from_url(url):
     """Extracts text content from a given URL."""
     headers = {
-        "User-Agent": """
-        Mozilla/5.0 (Windows NT 10.0; Win64; x64)
-        AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36
-        """
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
     }
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
@@ -111,14 +108,10 @@ def main():
         with col1:
             st.write("**Total Nutrition**")
             st.write(
-                f"""**Protein:**
-                {total_nutrients.get('PROCNT', {}).get('quantity', 0):.2f} g
-                """
+                f"**Protein:** {total_nutrients.get('PROCNT', {}).get('quantity', 0):.2f} g"
             )
             st.write(
-                f"""**Carbohydrates:**
-                {total_nutrients.get('CHOCDF', {}).get('quantity', 0):.2f} g
-                """
+                f"**Carbohydrates:** {total_nutrients.get('CHOCDF', {}).get('quantity', 0):.2f} g"
             )
             st.write(
                 f"**Fat:** {total_nutrients.get('FAT', {}).get('quantity', 0):.2f} g"
@@ -127,21 +120,13 @@ def main():
         with col2:
             st.write("**Per Serving**")
             st.write(
-                f"""**Protein:**
-                {total_nutrients.get('PROCNT', {}).get('quantity', 0)
-                / servings:.2f} g
-                """
+                f"**Protein:** {total_nutrients.get('PROCNT', {}).get('quantity', 0) / servings:.2f} g"
             )
             st.write(
-                f"""**Carbohydrates:**
-                {total_nutrients.get('CHOCDF', {}).get('quantity', 0)
-                / servings:.2f} g
-                """
+                f"**Carbohydrates:** {total_nutrients.get('CHOCDF', {}).get('quantity', 0) / servings:.2f} g"
             )
             st.write(
-                f"""**Fat:** {total_nutrients.get('FAT', {}).get('quantity', 0)
-                / servings:.2f} g
-                """
+                f"**Fat:** {total_nutrients.get('FAT', {}).get('quantity', 0) / servings:.2f} g"
             )
 
 
