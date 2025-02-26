@@ -40,7 +40,7 @@ def get_ingredients_from_text(text):
                     of strings in the format ['quantity ingredient']
                     (dont give it a variable name)
                     Convert fractions into its numerical value.
-                    Convert to metric.
+                    Convert just ounces into metric (dont convert cups / tsp / tbsp).
                     """,
                 },
                 {"role": "user", "content": text},
