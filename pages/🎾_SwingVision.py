@@ -4,8 +4,6 @@ import re
 import plotly.graph_objects as go
 from db import engine
 
-st.set_page_config(layout="wide")
-
 court_length = 23.77  # meters
 court_width = 8.23  # meters
 doubles_court_width = 10.97  # meters
@@ -26,135 +24,6 @@ def extract_date_and_description(filename):
     date = date_match.group(0) if date_match else None
     description = description_match.group(1) if description_match else None
     return date, description
-
-
-def draw_tennis_court(df):
-    fig = go.Figure()
-
-    # Add the court lines
-    fig.add_shape(
-        type="rect",
-        x0=-court_width / 2,
-        y0=0,
-        x1=court_width / 2,
-        y1=court_length,
-        line=dict(color="green", width=3),
-    )
-    fig.add_shape(
-        type="rect",
-        x0=-doubles_court_width / 2,
-        y0=0,
-        x1=doubles_court_width / 2,
-        y1=court_length,
-        line=dict(color="red", width=3),
-    )
-    fig.add_shape(
-        type="rect",
-        x0=-court_width / 2,
-        y0=court_length / 2,
-        x1=court_width / 2,
-        y1=court_length / 2 + 6.4,
-        line=dict(color="blue", width=3),
-    )
-    fig.add_shape(
-        type="rect",
-        x0=-court_width / 2,
-        y0=court_length / 2 - 6.4,
-        x1=court_width / 2,
-        y1=court_length / 2,
-        line=dict(color="blue", width=3),
-    )
-    fig.add_shape(
-        type="line",
-        x0=0,
-        y0=court_length / 2 - 6.4,
-        x1=0,
-        y1=court_length / 2 + 6.4,
-        line=dict(color="blue", width=3),
-    )
-    fig.add_shape(
-        type="line",
-        x0=-doubles_court_width / 2,
-        y0=court_length / 2,
-        x1=doubles_court_width / 2,
-        y1=court_length / 2,
-        line=dict(color="black", width=3),
-    )
-
-    # Plot the bounces and hits
-    fig.add_trace(
-        go.Scatter(
-            x=df[df["result"] == "In"]["bounce_x"],
-            y=df[df["result"] == "In"]["bounce_y"],
-            mode="markers",
-            name="Bounce In",
-            marker=dict(color="blue", size=6),
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=df[df["result"] == "Out"]["bounce_x"],
-            y=df[df["result"] == "Out"]["bounce_y"],
-            mode="markers",
-            name="Bounce Out",
-            marker=dict(color="red", size=6),
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=df[df["result"] == "Net"]["bounce_x"],
-            y=df[df["result"] == "Net"]["bounce_y"],
-            mode="markers",
-            name="Bounce Net",
-            marker=dict(color="purple", size=6, symbol="x"),
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=df[df["result"] == "In"]["hit_x"],
-            y=df[df["result"] == "In"]["hit_y"],
-            mode="markers",
-            name="Hit In",
-            marker=dict(color="green", size=6),
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=df[df["result"] == "Out"]["hit_x"],
-            y=df[df["result"] == "Out"]["hit_y"],
-            mode="markers",
-            name="Hit Out",
-            marker=dict(color="white", size=6, line=dict(color="green", width=2)),
-        )
-    )
-    fig.add_trace(
-        go.Scatter(
-            x=df[df["result"] == "Net"]["hit_x"],
-            y=df[df["result"] == "Net"]["hit_y"],
-            mode="markers",
-            name="Hit Net",
-            marker=dict(color="purple", size=6),
-        )
-    )
-
-    # Set the layout
-    fig.update_layout(
-        xaxis=dict(
-            range=[-doubles_court_width / 2 - 1, doubles_court_width / 2 + 1],
-            showgrid=False,
-            zeroline=False,
-            visible=False,
-            scaleanchor="y",
-            scaleratio=1.3,
-        ),
-        yaxis=dict(
-            range=[-3, court_length + 3], showgrid=False, zeroline=False, visible=False
-        ),
-        plot_bgcolor="white",
-        margin=dict(l=0, r=0, t=0, b=0),
-    )
-
-    st.plotly_chart(fig)
 
 
 def display_metrics(df):
@@ -379,9 +248,6 @@ def main_page():
     df = add_filters(df)
 
     col1, col2 = st.columns([2, 1])
-
-    # with col1:
-    # draw_tennis_court(df)
 
     with col1:
         plot_time_series(df)

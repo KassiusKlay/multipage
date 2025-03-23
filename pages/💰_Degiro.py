@@ -234,8 +234,11 @@ def show_account_movement(account_df):
     st.altair_chart(bar)
 
 
+@st.cache_data
 def get_historical_data(ticker):
-    historical_data = yf.download(ticker)["Close"].reset_index()
+    historical_data = yf.download(ticker)
+    historical_data.columns = historical_data.columns.droplevel(1)
+    historical_data = historical_data["Close"].reset_index()
     if historical_data.empty:
         st.warning("Sem dados")
         st.stop()
