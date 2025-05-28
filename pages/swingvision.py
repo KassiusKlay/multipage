@@ -7,7 +7,9 @@ import streamlit as st
 from swingvision_analytics import (
     dashboard,
     performance_evolution,
-    analytics,
+    shot_analysis,
+    match_analysis,
+    tactical_analysis,
     raw_data,
     match_details,
     upload_files,
@@ -32,11 +34,13 @@ def main_page():
     match_metrics_df = data_processing.calculate_match_metrics(matches, points, shots)
 
     # Create tabs for different views
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
         [
             "📊 Dashboard",
             "📈 Performance Evolution",
-            "📊 Analytics",
+            "🎾 Shot Analysis",
+            "📊 Match Analysis",
+            "🧠 Tactical Analysis",
             "📋 Raw Data",
             "🔍 Match Details",
         ]
@@ -51,12 +55,18 @@ def main_page():
         )
 
     with tab3:
-        analytics.render_analytics_tab(matches, points, shots)
+        shot_analysis.render_shot_analysis_tab(matches, points, shots)
 
     with tab4:
-        raw_data.render_raw_data_tab(matches, points, shots)
+        match_analysis.render_match_analysis_tab(matches, points, shots)
 
     with tab5:
+        tactical_analysis.render_tactical_analysis_tab(matches, points, shots)
+
+    with tab6:
+        raw_data.render_raw_data_tab(matches, points, shots)
+
+    with tab7:
         match_details.render_match_details_tab(matches, points, shots, match_metrics_df)
 
 
