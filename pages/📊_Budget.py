@@ -161,18 +161,21 @@ def process_tsv(file, file_type):
 
     column_names = [f"Column_{i}" for i in range(max_cols)]
 
-    df = pd.read_csv(
-        file,
-        sep="\t",
-        names=column_names,
-        header=None,
-        encoding="ISO-8859-1",
-    )
+    if file_type == "Company Debit":
+        df = pd.read_excel(file)
+    else:
+        df = pd.read_csv(
+            file,
+            sep="\t",
+            names=column_names,
+            header=None,
+            encoding="ISO-8859-1",
+        )
 
     if file_type == "Personal Debit" or file_type == "Personal Credit":
         columns_to_keep = [df.columns[i] for i in [1, 2, 3]]
     elif file_type == "Company Debit":
-        columns_to_keep = [df.columns[i] for i in [5, 6, 7]]
+        columns_to_keep = [df.columns[i] for i in [0, 3, 4]]
     elif file_type == "Company Credit":
         columns_to_keep = [df.columns[i] for i in [1, 2, 3]]
 
@@ -188,6 +191,11 @@ def process_tsv(file, file_type):
             df.date = pd.to_datetime(df.date, format="%Y/%m/%d")
         elif file_type == "Company Credit":
             df.date = pd.to_datetime(df.date, format="%Y-%m-%d")
+    except Exception:
+        st.warning("Ficheiro Inválido")
+        st.stop()
+    try:
+        df["amount"] = df["amount"].str.replace(r"[+\s]", "", regex=True)
     except Exception:
         st.warning("Ficheiro Inválido")
         st.stop()
@@ -208,7 +216,7 @@ def insert_row_into_database(row, origin, category):
 
 def upload_files():
     st.title("Upload Files")
-    uploaded_file = st.file_uploader("Choose a file", type=["tsv", "xls"])
+    uploaded_file = st.file_uploader("Choose a file", type=["tsv", "xls", "xlsx"])
 
     if uploaded_file is not None:
         file_type = st.selectbox(
