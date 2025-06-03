@@ -234,72 +234,6 @@ def analyze_rally_length_impact(shots, points):
 
 
 @st.cache_data
-def analyze_streak_patterns(points):
-    """Analyze performance after winning/losing multiple points in a row"""
-    streak_data = []
-
-    # Sort points chronologically within each match
-    points_sorted = points.sort_values(["match_id", "set", "game", "point"])
-
-    for match_id, match_points in points_sorted.groupby("match_id"):
-        current_streak = 0
-        streak_type = None  # 'win' or 'loss'
-
-        match_points = match_points.reset_index(drop=True)
-
-        for i, row in match_points.iterrows():
-            won_point = row["point_winner"] == HOST
-
-            # Update streak
-            if streak_type is None:
-                # First point of match
-                current_streak = 1
-                streak_type = "win" if won_point else "loss"
-            elif (streak_type == "win" and won_point) or (
-                streak_type == "loss" and not won_point
-            ):
-                # Continue streak
-                current_streak += 1
-            else:
-                # Streak broken, start new one
-                current_streak = 1
-                streak_type = "win" if won_point else "loss"
-
-            # Record data for next point analysis
-            if i < len(match_points) - 1:  # Not the last point
-                next_won = match_points.iloc[i + 1]["point_winner"] == HOST
-
-                streak_data.append(
-                    {
-                        "match_id": match_id,
-                        "current_streak_length": min(
-                            current_streak, 10
-                        ),  # Cap at 10 for analysis
-                        "current_streak_type": streak_type,
-                        "won_next_point": next_won,
-                        "break_point": row["break_point"],
-                        "set_point": row["set_point"],
-                    }
-                )
-
-    df = pd.DataFrame(streak_data)
-
-    if df.empty:
-        return pd.DataFrame()
-
-    # Analyze performance after different streak lengths
-    streak_analysis = (
-        df.groupby(["current_streak_type", "current_streak_length"])
-        .agg({"won_next_point": ["count", "sum", "mean"]})
-        .round(3)
-    )
-
-    streak_analysis.columns = ["Total_Points", "Next_Points_Won", "Next_Point_Win_Rate"]
-
-    return streak_analysis
-
-
-@st.cache_data
 def analyze_game_score_performance(points):
     """Analyze performance at different game scores (REGULAR GAMES ONLY)"""
     game_classifications = identify_tie_breaks(points)
@@ -692,27 +626,6 @@ def render_tactical_analysis_tab(matches, points, shots):
                 use_container_width=True,
             )
 
-            # Add interpretation
-            winner_win_pct = (
-                first_point_stats.loc["Joao Cassis", "win_pct"]
-                if "Joao Cassis" in first_point_stats.index
-                else 0
-            )
-            opponent_win_pct = (
-                first_point_stats.loc["Opponent", "win_pct"]
-                if "Opponent" in first_point_stats.index
-                else 0
-            )
-
-            if winner_win_pct > 0.6:
-                st.success(
-                    "**Insight**: When you win the first point, you have a strong chance of winning the game!"
-                )
-            elif opponent_win_pct > 0.6:
-                st.error(
-                    "**Warning**: When your opponent wins the first point, they tend to win the game."
-                )
-
     with col2:
         st.write("**Serve First Advantage in Sets**")
         serve_first_stats = analyze_serve_first_advantage(points)
@@ -721,27 +634,6 @@ def render_tactical_analysis_tab(matches, points, shots):
                 serve_first_stats.style.format({"win_pct": "{:.1%}"}),
                 use_container_width=True,
             )
-
-            # Add interpretation
-            your_advantage = (
-                serve_first_stats.loc["Joao Cassis", "win_pct"]
-                if "Joao Cassis" in serve_first_stats.index
-                else 0
-            )
-            opp_advantage = (
-                serve_first_stats.loc["Opponent", "win_pct"]
-                if "Opponent" in serve_first_stats.index
-                else 0
-            )
-
-            if your_advantage > opp_advantage + 0.1:
-                st.success(
-                    "**Tactical Tip**: Choose to serve first when you win the toss!"
-                )
-            elif opp_advantage > your_advantage + 0.1:
-                st.info(
-                    "**Tactical Tip**: Consider choosing to receive when you win the toss."
-                )
 
     st.subheader("🎾 Rally Length Performance Analysis")
     rally_performance = analyze_rally_length_impact(shots, points)
@@ -753,34 +645,8 @@ def render_tactical_analysis_tab(matches, points, shots):
             ),
             use_container_width=True,
         )
-
-        # Key insights
-        best_rally_type = rally_performance["Win_Rate"].idxmax()
-        best_win_rate = rally_performance.loc[best_rally_type, "Win_Rate"]
-        st.success(
-            f"🎯 **Best Rally Length**: {best_rally_type} rallies ({best_win_rate:.1%} win rate)"
-        )
     else:
         st.info("Not enough rally data for analysis.")
-
-    st.subheader("🔥 Streak Pattern Analysis")
-    streak_analysis = analyze_streak_patterns(points)
-
-    if not streak_analysis.empty:
-        st.write("**Performance after winning/losing streaks:**")
-        st.dataframe(
-            streak_analysis.style.format({"Next_Point_Win_Rate": "{:.1%}"}),
-            use_container_width=True,
-        )
-
-        # Show key patterns
-        if ("win", 3) in streak_analysis.index:
-            win_3_rate = streak_analysis.loc[("win", 3), "Next_Point_Win_Rate"]
-            st.info(
-                f"After 3-point winning streak: {win_3_rate:.1%} chance of winning next point"
-            )
-    else:
-        st.info("Not enough streak data for analysis.")
 
     # REGULAR GAMES ANALYSIS
     st.subheader("🎯 Regular Games - Game Score Performance")
@@ -931,22 +797,6 @@ def render_tactical_analysis_tab(matches, points, shots):
             use_container_width=True,
         )
 
-        # Key insights for match tie-breaks
-        if summary_stats["win_percentage"] == 0:
-            st.error(
-                "🚨 **Critical Area**: You haven't won any match tie-breaks. This is where matches are decided!"
-            )
-
-            if summary_stats["first_to_8_rate"] > 60:
-                st.warning(
-                    "💡 **Pattern**: You often reach 8 points but struggle to close out. Work on finishing!"
-                )
-
-        elif summary_stats["win_percentage"] < 50:
-            st.warning(
-                "⚠️ **Improvement Area**: Match tie-break performance needs work for closing out matches."
-            )
-
     else:
         st.info("No match tie-breaks found in the data.")
 
@@ -960,111 +810,5 @@ def render_tactical_analysis_tab(matches, points, shots):
             overall_clutch.style.format({"Win_Rate": "{:.1%}"}),
             use_container_width=True,
         )
-
-        # Highlight best/worst clutch situations
-        best_clutch = overall_clutch["Win_Rate"].idxmax()
-        worst_clutch = overall_clutch["Win_Rate"].idxmin()
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.success(
-                f"💪 **Strongest in**: {best_clutch.replace('_', ' ').title()} ({overall_clutch.loc[best_clutch, 'Win_Rate']:.1%})"
-            )
-        with col2:
-            st.error(
-                f"⚠️ **Focus on**: {worst_clutch.replace('_', ' ').title()} ({overall_clutch.loc[worst_clutch, 'Win_Rate']:.1%})"
-            )
     else:
         st.info("Not enough clutch situation data for analysis.")
-
-    # SUMMARY INSIGHTS
-    st.subheader("📈 Key Tactical Insights")
-
-    # Combine insights from all analyses
-    insights = []
-
-    # Set tie-break insights
-    if not set_tb_data.empty:
-        set_summary = set_tb_data.iloc[0]["summary_stats"]
-        if set_summary["win_percentage"] >= 75:
-            insights.append(
-                "🏆 **Strength**: Excellent in set tie-breaks - you handle pressure well when sets are on the line"
-            )
-        elif set_summary["win_percentage"] >= 50:
-            insights.append("🟡 **Good**: Solid set tie-break performance")
-        else:
-            insights.append(
-                "🔴 **Area for Improvement**: Set tie-break performance needs work"
-            )
-
-    # Match tie-break insights
-    if not match_tb_data.empty:
-        match_summary = match_tb_data.iloc[0]["summary_stats"]
-        if match_summary["win_percentage"] == 0:
-            insights.append(
-                "🚨 **Critical Weakness**: 0% match tie-break win rate - this is costing you matches!"
-            )
-        elif match_summary["win_percentage"] < 33:
-            insights.append(
-                "🔴 **Major Concern**: Very poor match tie-break performance"
-            )
-        elif match_summary["win_percentage"] < 50:
-            insights.append(
-                "🟡 **Improvement Needed**: Below-average match tie-break performance"
-            )
-
-        if (
-            match_summary.get("first_to_8_rate", 0) > 60
-            and match_summary["win_percentage"] < 50
-        ):
-            insights.append(
-                "💡 **Key Pattern**: You reach 8 points frequently but struggle to close - work on finishing points 9-10"
-            )
-
-    # Display insights
-    if insights:
-        for insight in insights:
-            if "🚨" in insight or "🔴" in insight:
-                st.error(insight)
-            elif "🟡" in insight or "💡" in insight:
-                st.warning(insight)
-            else:
-                st.success(insight)
-
-    # Recommendations
-    st.subheader("🎯 Tactical Recommendations")
-
-    recommendations = []
-
-    if not match_tb_data.empty:
-        match_summary = match_tb_data.iloc[0]["summary_stats"]
-        if match_summary["win_percentage"] < 50:
-            recommendations.append(
-                "🎾 **Practice match tie-breaks** under pressure - simulate match-deciding scenarios"
-            )
-            recommendations.append(
-                "🧠 **Mental training** for closing out matches - work with a sports psychologist"
-            )
-
-        if match_summary.get("first_to_8_rate", 0) > 60:
-            recommendations.append(
-                "⚡ **Focus on points 8-10** in match tie-breaks - these are your weak points"
-            )
-            recommendations.append(
-                "🎯 **Practice serving under pressure** - many match tie-breaks are decided by serve quality"
-            )
-
-    if not set_tb_data.empty:
-        set_summary = set_tb_data.iloc[0]["summary_stats"]
-        if set_summary["win_percentage"] > 75:
-            recommendations.append(
-                "✅ **Leverage your set tie-break strength** - push close sets to tie-breaks when possible"
-            )
-
-    if recommendations:
-        for rec in recommendations:
-            st.info(rec)
-    else:
-        st.info(
-            "📊 Upload more match data to get personalized tactical recommendations!"
-        )
