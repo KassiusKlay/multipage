@@ -72,12 +72,6 @@ def main_page():
 
 def main():
     """Main application entry point"""
-    st.set_page_config(
-        page_title="SwingVision Analytics",
-        page_icon="🎾",
-        layout="wide",
-        initial_sidebar_state="expanded",
-    )
 
     # Navigation
     option = st.sidebar.radio(
