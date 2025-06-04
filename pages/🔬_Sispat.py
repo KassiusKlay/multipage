@@ -28,9 +28,12 @@ def login():
 
 @st.cache_data
 def get_stored_data():
-    return pd.read_sql(
-        "SELECT * FROM sispat", engine, parse_dates=["entrada", "expedido"]
-    )
+    query = """
+    SELECT nr_exame, tipo_exame, patologista, entrada, expedido, imuno, unidade
+    FROM sispat
+    ORDER BY expedido DESC
+    """
+    return pd.read_sql(query, engine, parse_dates=["entrada", "expedido"])
 
 
 @st.cache_data
