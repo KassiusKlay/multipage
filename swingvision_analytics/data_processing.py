@@ -34,7 +34,11 @@ def process_data(matches, points, shots):
         axis=1,
     )
     points.drop(columns="guest_team", inplace=True)
-    shots = shots[shots.stroke != "Feed"]
+    shots = shots[shots.stroke != "Feed"].copy()
+    # After loading the CSVs
+    points["match_id"] = points["match_id"].astype(str)
+    matches["match_id"] = matches["match_id"].astype(str)
+    shots["match_id"] = shots["match_id"].astype(str)
 
     return matches, points, shots
 

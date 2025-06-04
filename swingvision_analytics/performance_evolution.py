@@ -7,10 +7,10 @@ import streamlit as st
 import plotly.graph_objects as go
 
 
-def create_evolution_chart(match_metrics_df, selected_metrics):
-    """Create evolution chart for selected metrics"""
+def create_evolution_chart(match_metrics_df, metric):
+    """Create evolution chart for a single metric"""
 
-    if match_metrics_df.empty or not selected_metrics:
+    if match_metrics_df.empty or not metric or metric not in match_metrics_df.columns:
         return go.Figure()
 
     # Sort by date
@@ -18,28 +18,41 @@ def create_evolution_chart(match_metrics_df, selected_metrics):
 
     fig = go.Figure()
 
-    # Add a trace for each selected metric
-    for metric in selected_metrics:
-        if metric in df_sorted.columns:
-            fig.add_trace(
-                go.Scatter(
-                    x=df_sorted["match_date"],
-                    y=df_sorted[metric],
-                    mode="lines+markers",
-                    name=metric.replace("_", " ").title(),
-                    hovertemplate=f'<b>{metric.replace("_", " ").title()}</b><br>'
-                    + "Date: %{x}<br>"
-                    + "Value: %{y:.2f}<br>"
-                    + "<extra></extra>",
-                )
-            )
+    # Determine win/loss colors using points_won_pct > 0.5
+    if "points_won_pct" in df_sorted.columns:
+        colors = [
+            "green" if pct > 0.5 else "red" for pct in df_sorted["points_won_pct"]
+        ]
+    else:
+        # Fallback to blue if no win/loss data available
+        colors = ["blue"] * len(df_sorted)
+
+    fig.add_trace(
+        go.Scatter(
+            x=df_sorted["match_date"],
+            y=df_sorted[metric],
+            mode="lines+markers",
+            name=metric.replace("_", " ").title(),
+            marker=dict(color=colors, size=8, line=dict(width=1, color="white")),
+            hovertemplate=f'<b>{metric.replace("_", " ").title()}</b><br>'
+            + "Opponent: %{customdata}<br>"
+            + "Value: %{y:.2f}<br>"
+            + "<extra></extra>",
+            customdata=(
+                df_sorted["opponent"]
+                if "opponent" in df_sorted.columns
+                else ["Unknown"] * len(df_sorted)
+            ),
+        )
+    )
 
     fig.update_layout(
-        title="Tennis Performance Evolution Over Time",
+        title=metric.replace("_", " ").title(),
         xaxis_title="Match Date",
         yaxis_title="Value",
         hovermode="x unified",
-        height=500,
+        height=400,
+        showlegend=False,
     )
 
     return fig
@@ -49,23 +62,55 @@ def render_performance_evolution_tab(matches, points, shots, match_metrics_df):
     """Render the performance evolution tab"""
     st.header("📈 Performance Evolution")
 
-    # Metric selection
+    # Available metrics
     available_metrics = [
         col
         for col in match_metrics_df.columns
         if col not in ["match_id", "match_date", "opponent", "location"]
     ]
 
-    selected_metrics = st.multiselect(
-        "Select metrics to display:",
-        available_metrics,
-        default=["first_serve_pct", "winners", "unforced_errors", "points_won_pct"],
-        format_func=lambda x: x.replace("_", " ").title(),
-    )
+    # Create two columns for side-by-side charts
+    col1, col2 = st.columns(2)
 
-    if selected_metrics:
-        evolution_fig = create_evolution_chart(match_metrics_df, selected_metrics)
-        st.plotly_chart(evolution_fig, use_container_width=True)
+    with col1:
+        # First metric selector
+        selected_metric_1 = st.selectbox(
+            "Select first metric:",
+            available_metrics,
+            index=(
+                available_metrics.index("first_serve_speed")
+                if "first_serve_speed" in available_metrics
+                else 0
+            ),
+            format_func=lambda x: x.replace("_", " ").title(),
+            key="metric_1",
+        )
+
+        if selected_metric_1:
+            evolution_fig_1 = create_evolution_chart(
+                match_metrics_df, selected_metric_1
+            )
+            st.plotly_chart(evolution_fig_1, use_container_width=True)
+
+    with col2:
+        # Second metric selector
+        selected_metric_2 = st.selectbox(
+            "Select second metric:",
+            available_metrics,
+            index=(
+                available_metrics.index("first_serve_won_pct")
+                if "first_serve_won_pct" in available_metrics
+                else 1
+            ),
+            format_func=lambda x: x.replace("_", " ").title(),
+            key="metric_2",
+        )
+
+        if selected_metric_2:
+            evolution_fig_2 = create_evolution_chart(
+                match_metrics_df, selected_metric_2
+            )
+            st.plotly_chart(evolution_fig_2, use_container_width=True)
 
     # Detailed metrics table
     st.subheader("Match Metrics Table")

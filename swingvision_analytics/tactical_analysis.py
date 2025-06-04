@@ -218,7 +218,7 @@ def analyze_rally_length_impact(shots, points):
 
     # Calculate performance by rally length
     rally_performance = (
-        df.groupby("rally_category")
+        df.groupby("rally_category", observed=False)
         .agg({"won_point": ["count", "sum", "mean"], "rally_length": "mean"})
         .round(3)
     )
@@ -703,6 +703,10 @@ def render_tactical_analysis_tab(matches, points, shots):
             "first_to_5",
         ]
         display_df = set_tb_data[display_cols].copy()
+        # Convert any UUID columns to strings for display
+        for col in display_df.columns:
+            if display_df[col].dtype == "object":
+                display_df[col] = display_df[col].astype(str)
         display_df["Result"] = display_df["won_tie_break"].map(
             {True: "✅ WON", False: "❌ LOST"}
         )
@@ -770,6 +774,10 @@ def render_tactical_analysis_tab(matches, points, shots):
             "reached_match_point",
         ]
         display_df = match_tb_data[display_cols].copy()
+        # Convert any UUID columns to strings for display
+        for col in display_df.columns:
+            if display_df[col].dtype == "object":
+                display_df[col] = display_df[col].astype(str)
         display_df["Result"] = display_df["won_tie_break"].map(
             {True: "✅ WON", False: "❌ LOST"}
         )
