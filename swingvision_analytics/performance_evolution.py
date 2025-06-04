@@ -83,14 +83,14 @@ def render_performance_evolution_tab(matches, points, shots, match_metrics_df):
                 else 0
             ),
             format_func=lambda x: x.replace("_", " ").title(),
-            key="metric_1",
+            key="metric_selectbox_1",
         )
 
         if selected_metric_1:
             evolution_fig_1 = create_evolution_chart(
                 match_metrics_df, selected_metric_1
             )
-            st.plotly_chart(evolution_fig_1, use_container_width=True)
+            st.plotly_chart(evolution_fig_1, use_container_width=True, key="chart_1")
 
     with col2:
         # Second metric selector
@@ -98,19 +98,19 @@ def render_performance_evolution_tab(matches, points, shots, match_metrics_df):
             "Select second metric:",
             available_metrics,
             index=(
-                available_metrics.index("first_serve_won_pct")
-                if "first_serve_won_pct" in available_metrics
+                available_metrics.index("first_serve_points_won_pct")
+                if "first_serve_points_won_pct" in available_metrics
                 else 1
             ),
             format_func=lambda x: x.replace("_", " ").title(),
-            key="metric_2",
+            key="metric_selectbox_2",
         )
 
         if selected_metric_2:
             evolution_fig_2 = create_evolution_chart(
                 match_metrics_df, selected_metric_2
             )
-            st.plotly_chart(evolution_fig_2, use_container_width=True)
+            st.plotly_chart(evolution_fig_2, use_container_width=True, key="chart_2")
 
     # Detailed metrics table
     st.subheader("Match Metrics Table")
