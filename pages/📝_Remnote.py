@@ -11,7 +11,10 @@ TABLE_NAME = "remnote"
 # --- Helper Functions ---
 @st.cache_data
 def get_stored_data():
-    return pd.read_sql(f"SELECT * FROM {TABLE_NAME}", engine)
+    # Filter out ignored records
+    return pd.read_sql(
+        f"SELECT * FROM {TABLE_NAME} WHERE tag != 'ignore' OR tag IS NULL", engine
+    )
 
 
 def extract_urls_from_markdown(md_content):
@@ -77,8 +80,8 @@ elif option == "Upload Files":
         st.session_state.last_upload_hash = None
 
     if uploaded_files:
-        # Load existing URLs from database
-        stored_df = get_stored_data()
+        # Load existing URLs from database (including ignored ones to avoid duplicates)
+        stored_df = pd.read_sql(f"SELECT * FROM {TABLE_NAME}", engine)
         existing_urls = set(stored_df["url"].tolist())
 
         new_urls = []
@@ -138,6 +141,8 @@ elif option == "Upload Files":
                     st.session_state.index += 1
                     st.rerun()
             with col2:
-                if st.button("Skip"):
+                if st.button("Ignore"):
+                    # Store with "ignore" tag, using placeholder values for required fields
+                    insert_url_record(url, "Ignored", "Ignored", "Ignored", "ignore")
                     st.session_state.index += 1
                     st.rerun()
