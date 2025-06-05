@@ -13,36 +13,6 @@ from degiro_connector.trading.models.account import (
 from degiro_connector.trading.models.transaction import HistoryRequest
 from currency_converter import CurrencyConverter
 
-import os
-
-# Check if running on cloud
-if any(
-    [
-        os.getenv("STREAMLIT_SHARING_MODE"),
-        "streamlit.app" in str(os.getenv("HOSTNAME", "")),
-        "streamlitapp.com" in str(os.getenv("HOSTNAME", "")),
-    ]
-):
-    st.title("💰 DeGiro Portfolio Analyzer")
-    st.error(
-        "🚫 **This app cannot connect to DeGiro API when deployed on Streamlit Cloud**"
-    )
-    st.markdown(
-        """
-    ### 🏠 **Run Locally Instead**
-
-    DeGiro blocks connections from cloud servers for security reasons.
-
-    **To use this app:**
-    1. Download/clone this code to your computer
-    2. Install requirements: `pip install streamlit pandas altair yfinance degiro-connector currency-converter`
-    3. Run: `streamlit run 💰_Degiro.py`
-
-    **Or create a simplified version that works with CSV uploads instead of live API calls.**
-    """
-    )
-    st.stop()
-
 
 def get_ticker_data(ticker):
     return yf.Ticker(ticker)
@@ -59,15 +29,9 @@ def check_credentials():
         api = TradingAPI(credentials=credentials)
         api.connect()
         st.session_state.api = api
-        st.success("Login successful!")
         return
-    except Exception as e:
-        st.error(f"Login failed: {str(e)}")
-        st.error(f"Error type: {type(e).__name__}")
-        # Log the full error for debugging
-        import traceback
-
-        st.code(traceback.format_exc())
+    except Exception:
+        st.warning("Wrong Credentials")
         return
 
 
