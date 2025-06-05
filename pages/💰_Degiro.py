@@ -29,9 +29,15 @@ def check_credentials():
         api = TradingAPI(credentials=credentials)
         api.connect()
         st.session_state.api = api
+        st.success("Login successful!")
         return
-    except Exception:
-        st.warning("Wrong Credentials")
+    except Exception as e:
+        st.error(f"Login failed: {str(e)}")
+        st.error(f"Error type: {type(e).__name__}")
+        # Log the full error for debugging
+        import traceback
+
+        st.code(traceback.format_exc())
         return
 
 
