@@ -28,12 +28,9 @@ def login():
 
 @st.cache_data
 def get_stored_data():
-    query = """
-    SELECT ano, nr_exame, tipo_exame, patologista, entrada, expedido, imuno, unidade
-    FROM sispat
-    ORDER BY expedido DESC
-    """
-    return pd.read_sql(query, engine, parse_dates=["entrada", "expedido"])
+    return pd.read_sql(
+        "SELECT * FROM sispat", engine, parse_dates=["entrada", "expedido"]
+    )
 
 
 @st.cache_data
@@ -244,8 +241,6 @@ def plot_bar(df, plot_selection):
 def main_page():
     df = get_stored_data()
     df = process_df(df)
-    st.write(df.columns)
-    st.stop()
     lista_patologistas = df.patologista.sort_values().unique().tolist()
     lista_patologistas.insert(0, "Todos")
 
@@ -332,9 +327,6 @@ def upload_files():
                 inplace=True,
             )
             file_df["unidade"] = unidade
-            st.write(file_df.columns)
-            st.write(df.columns)
-            st.stop()
             file_df.columns = df.columns
             file_df = file_df.replace("....", None).fillna(0)
             file_df[["ano", "nr_exame", "imuno"]] = file_df[
