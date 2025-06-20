@@ -29,7 +29,7 @@ def login():
 @st.cache_data
 def get_stored_data():
     query = """
-    SELECT nr_exame, tipo_exame, patologista, entrada, expedido, imuno, unidade
+    SELECT ano, nr_exame, tipo_exame, patologista, entrada, expedido, imuno, unidade
     FROM sispat
     ORDER BY expedido DESC
     """
