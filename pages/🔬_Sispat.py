@@ -244,6 +244,8 @@ def plot_bar(df, plot_selection):
 def main_page():
     df = get_stored_data()
     df = process_df(df)
+    st.write(df.columns)
+    st.stop()
     lista_patologistas = df.patologista.sort_values().unique().tolist()
     lista_patologistas.insert(0, "Todos")
 
