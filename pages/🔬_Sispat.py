@@ -330,6 +330,9 @@ def upload_files():
                 inplace=True,
             )
             file_df["unidade"] = unidade
+            st.write(file_df.columns)
+            st.write(df.columns)
+            st.stop()
             file_df.columns = df.columns
             file_df = file_df.replace("....", None).fillna(0)
             file_df[["ano", "nr_exame", "imuno"]] = file_df[
