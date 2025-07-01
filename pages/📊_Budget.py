@@ -249,6 +249,7 @@ def upload_files():
             "Income",
             "Insurance",
             "Investments",
+            "Job",
             "Other",
             "Rent",
             "Salary",
