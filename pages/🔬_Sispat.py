@@ -339,7 +339,7 @@ def upload_files():
             new_df = pd.concat([new_df, file_df])
         df = pd.concat([df, new_df, df]).drop_duplicates(keep=False)
         if df.empty:
-            st.info('Sem dados novos)
+            st.info("Sem dados novos")
             st.stop()
         else:            
             st.write(df)
