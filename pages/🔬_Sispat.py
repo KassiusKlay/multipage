@@ -338,10 +338,14 @@ def upload_files():
             )
             new_df = pd.concat([new_df, file_df])
         df = pd.concat([df, new_df, df]).drop_duplicates(keep=False)
-        st.write(df)
-        df.to_sql("sispat", engine, if_exists="append", index=False)
-        get_stored_data.clear()
-        st.success("Ficheiros Carregados")
+        if df.empty:
+            st.info('Sem dados novos)
+            st.stop()
+        else:            
+            st.write(df)
+            df.to_sql("sispat", engine, if_exists="append", index=False)
+            get_stored_data.clear()
+            st.success("Ficheiros Carregados")
 
 
 if "logged_in" not in st.session_state:
