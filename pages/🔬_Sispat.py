@@ -321,6 +321,7 @@ def upload_files():
             unidade = file.name.split(".")[0]
             if len(file_df.columns) != 12:
                 st.error(f"Ficheiro errado: {file.name}")
+                st.error(df.columns)
                 st.stop()
             file_df.drop(
                 columns=["Paciente", "Cód. Facturação", "NHC", "Episódio", "Soarian"],
