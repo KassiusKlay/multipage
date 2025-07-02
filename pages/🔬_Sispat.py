@@ -319,7 +319,7 @@ def upload_files():
         for file in uploaded_files:
             file_df = pd.read_html(file, header=0)[0][:-1]
             unidade = file.name.split(".")[0]
-            if (unidade not in df.unidade.unique()) or (len(file_df.columns) != 12):
+            if len(file_df.columns) != 12:
                 st.error(f"Ficheiro errado: {file.name}")
                 st.stop()
             file_df.drop(
