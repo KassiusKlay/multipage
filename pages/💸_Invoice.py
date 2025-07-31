@@ -42,6 +42,13 @@ def upload_files():
         merged_df = pd.merge(stored_df, uploaded_df, how="outer", indicator=True)
         final_df = merged_df[merged_df["_merge"] == "right_only"]
         final_df = final_df.drop("_merge", axis=1)
+        duplicates = final_df[
+            final_df.duplicated(subset=["ano", "nr_exame", "tipo_exame"], keep=False)
+        ]
+        if not duplicates.empty:
+            st.error("Linhas Duplicadas")
+            st.write(duplicates)
+            st.stop()
         if not final_df.empty:
             st.write(final_df)
             final_df.to_sql("honorarios", engine, if_exists="append", index=False)
@@ -65,6 +72,45 @@ def process_df(df):
     df.columns = df.iloc[0]
     df.rename(columns={"QT": "qt imuno"}, inplace=True)
     df = df[df["Ano"].astype(str).str.startswith("20")]
+
+    duplicates = df[df.duplicated(subset=["Ano", "Nº Exame"], keep=False)]
+    if not duplicates.empty:
+        grouped = (
+            duplicates.groupby(["Ano", "Nº Exame"])
+            .agg(
+                {
+                    "Honorários": "sum",
+                    "PVP": "sum",
+                    **{
+                        col: "first"
+                        for col in [
+                            "Entrada",
+                            "Mês Entrada",
+                            "Expedido",
+                            "Mês Exp.",
+                            "NHC",
+                            "Unidade",
+                            "Episódio",
+                            "Soarian",
+                            "Exame",
+                            "Cód. Facturação",
+                            "Patologista",
+                            "Entidade",
+                            "% Hon.",
+                            "qt imuno",
+                        ]
+                    },
+                }
+            )
+            .reset_index()
+        )
+        df = df[
+            ~df.set_index(["Ano", "Nº Exame"]).index.isin(
+                duplicates.set_index(["Ano", "Nº Exame"]).index
+            )
+        ]
+        df = pd.concat([df, grouped], ignore_index=True)
+
     if (
         "Estudo Imunocitoquímico (p/Anticorpo)" in df["Exame"].unique()
         or "Estudo Imunocitoquímico (p/Anticorpo)" in df["Cód. Facturação"].unique()
