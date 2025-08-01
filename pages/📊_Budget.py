@@ -150,7 +150,7 @@ def replace_empty_with_none(x):
         return x
 
 
-@st.cache_data
+# @st.cache_data
 def process_tsv(file, file_type):
     max_cols = 0
     for line in file:
@@ -175,7 +175,7 @@ def process_tsv(file, file_type):
     if file_type == "Personal Debit" or file_type == "Personal Credit":
         columns_to_keep = [df.columns[i] for i in [1, 2, 3]]
     elif file_type == "Company Debit":
-        columns_to_keep = [df.columns[i] for i in [0, 3, 4]]
+        columns_to_keep = [df.columns[i] for i in [0, 2, 3]]
     elif file_type == "Company Credit":
         columns_to_keep = [df.columns[i] for i in [1, 2, 3]]
 
@@ -185,23 +185,21 @@ def process_tsv(file, file_type):
     df = df[1:]
     df.columns = ["date", "description", "amount"]
     try:
-        if file_type == "Personal Debit" or file_type == "Personal Credit":
-            df.date = pd.to_datetime(df.date, dayfirst=True)
+        if file_type == "Personal Debit":
+            df.date = pd.to_datetime(df.date, format="%d-%m-%Y")
+        elif file_type == "Personal Credit":
+            df.date = pd.to_datetime(df.date, format="%d-%m-%Y ")
         elif file_type == "Company Debit":
-            df.date = pd.to_datetime(df.date, format="%Y/%m/%d")
+            df.date = pd.to_datetime(df.date, format="%d/%m/%Y")
         elif file_type == "Company Credit":
             df.date = pd.to_datetime(df.date, format="%Y-%m-%d")
     except Exception:
         st.warning("Ficheiro Inválido")
         st.stop()
-    try:
-        df["amount"] = df["amount"].str.replace(r"[+\s]", "", regex=True)
-    except Exception:
-        st.warning("Ficheiro Inválido")
-        st.stop()
-    df["amount"] = df["amount"].str.replace(".", "", regex=False)
-    df["amount"] = df["amount"].str.replace(",", ".", regex=False)
-    df["amount"] = df["amount"].astype(float)
+    if file_type in ["Personal Debit", "Personal Credit", "Company Credit"]:
+        df["amount"] = df["amount"].str.replace(".", "", regex=False)
+        df["amount"] = df["amount"].str.replace(",", ".", regex=False)
+        df["amount"] = df["amount"].astype(float)
     df["amount"] = df["amount"].abs()
     return df.reset_index(drop=True)
 
