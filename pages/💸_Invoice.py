@@ -4,6 +4,7 @@ import altair as alt
 import xlrd
 import bcrypt
 from db import engine
+from datetime import datetime
 
 
 def check_credentials():
@@ -190,14 +191,27 @@ def get_stored_data():
 
 
 def check_susana(df, sispat):
+    df = df.copy()
+    aditamento_mask = df["tipo_exame"].str.contains("Aditamento", na=False)
+    df.loc[aditamento_mask, "pvp"] = (
+        df.loc[aditamento_mask, "pvp"] / df.loc[aditamento_mask, "quantidade"]
+    )
+
     with st.form("cotovio"):
         cols = st.columns(2)
-        mes = cols[0].selectbox("Mês", df.expedido.dt.month.sort_values().unique())
-        ano = cols[1].selectbox("Ano", df.expedido.dt.year.sort_values().unique())
+        max_date = df.expedido.max()
+        default_month = max_date.month
+        default_year = max_date.year
+        months = df.expedido.dt.month.sort_values().unique()
+        years = df.expedido.dt.year.sort_values().unique()
+        month_index = list(months).index(default_month)
+        year_index = list(years).index(default_year)
+        mes = cols[0].selectbox("Mês", months, index=month_index)
+        ano = cols[1].selectbox("Ano", years, index=year_index)
         ok = st.form_submit_button("Confirmar")
     if ok:
-        df = df[(df.expedido.dt.year == ano) & (df.expedido.dt.month == mes)]
-        if df.empty:
+        df_filtered = df[(df.expedido.dt.year == ano) & (df.expedido.dt.month == mes)]
+        if df_filtered.empty:
             st.warning("Escolha uma data válida")
             st.stop()
         sispat = sispat[
@@ -207,7 +221,7 @@ def check_susana(df, sispat):
             & ~(sispat.tipo_exame.str.contains("Tipagem"))
             & (sispat.patologista == "Dr. João Cassis")
         ]
-        diff = list(set(sispat.nr_exame.tolist()) - set(df.nr_exame.tolist()))
+        diff = list(set(sispat.nr_exame.tolist()) - set(df_filtered.nr_exame.tolist()))
         diff = sispat[sispat.nr_exame.isin(diff)]
         if diff.empty:
             st.success("Tudo contemplado")
@@ -215,8 +229,133 @@ def check_susana(df, sispat):
             st.warning("Exames não contemplados")
             st.write(diff)
         imuno_sispat = sispat.imuno.sum()
-        imuno_susana = df[df.tipo_exame.str.contains("Aditamento")].quantidade.sum()
+        imuno_susana = df_filtered[
+            df_filtered.tipo_exame.str.contains("Aditamento")
+        ].quantidade.sum()
         st.write("Imuno real:", imuno_sispat, "Imuno Honorarios:", imuno_susana)
+
+        selected_grouped = (
+            df_filtered.groupby(["tipo_exame", "entidade"])["pvp"].mean().reset_index()
+        )
+        comparisons = []
+        for _, row in selected_grouped.iterrows():
+            tipo_exame = row["tipo_exame"]
+            entidade = row["entidade"]
+            pvp_selected = row["pvp"]
+
+            df_prior = df[
+                (df.expedido < datetime(ano, mes, 1))
+                & (df.tipo_exame == tipo_exame)
+                & (df.entidade == entidade)
+            ]
+
+            if not df_prior.empty:
+                max_prior_date = df_prior.expedido.max()
+                df_most_recent = df_prior[
+                    df_prior.expedido.dt.year == max_prior_date.year
+                ]
+                df_most_recent = df_most_recent[
+                    df_most_recent.expedido.dt.month == max_prior_date.month
+                ]
+
+                prior_grouped = (
+                    df_most_recent.groupby(["tipo_exame", "entidade"])["pvp"]
+                    .mean()
+                    .reset_index()
+                )
+                pvp_previous = prior_grouped[
+                    (prior_grouped.tipo_exame == tipo_exame)
+                    & (prior_grouped.entidade == entidade)
+                ]["pvp"]
+
+                if not pvp_previous.empty:
+                    pvp_previous = pvp_previous.iloc[0]
+                    pvp_difference = pvp_selected - pvp_previous
+                    if pvp_difference <= -0.50:
+                        comparisons.append(
+                            {
+                                "tipo_exame": tipo_exame,
+                                "entidade": entidade,
+                                "pvp_previous": pvp_previous,
+                                "pvp_selected": pvp_selected,
+                                "pvp_difference": pvp_difference,
+                                "prev_month": max_prior_date.month,
+                                "prev_year": max_prior_date.year,
+                            }
+                        )
+
+        changes = pd.DataFrame(comparisons)
+
+        if changes.empty:
+            st.success(
+                "Nenhuma redução de PVP de 0,50 ou mais encontrada em relação aos meses anteriores."
+            )
+        else:
+            st.warning(
+                "Reduções de PVP de 0,50 ou mais detectadas em relação aos meses anteriores:"
+            )
+            changes_display = changes[
+                [
+                    "tipo_exame",
+                    "entidade",
+                    "pvp_previous",
+                    "pvp_selected",
+                    "pvp_difference",
+                    "prev_month",
+                    "prev_year",
+                ]
+            ]
+            changes_display.columns = [
+                "Tipo de Exame",
+                "Entidade",
+                "PVP Mês Anterior",
+                f"PVP {mes}/{ano}",
+                "Diferença",
+                "Mês Anterior",
+                "Ano Anterior",
+            ]
+            st.dataframe(changes_display)
+
+        random_top5_rows = []
+        # Group by tipo_exame to iterate over each tipo_exame
+        grouped_by_exame = df_filtered.groupby("tipo_exame")
+        for tipo_exame, exame_group in grouped_by_exame:
+            # Count rows per entidade within this tipo_exame
+            entidade_counts = (
+                exame_group.groupby("entidade").size().reset_index(name="row_count")
+            )
+            # Get top 5 entidade by row count
+            top5_entidade = entidade_counts.nlargest(5, "row_count")[
+                "entidade"
+            ].tolist()
+            # For each top entidade, select a random row from df_filtered
+            for entidade in top5_entidade:
+                entity_rows = exame_group[exame_group["entidade"] == entidade]
+                if not entity_rows.empty:
+                    random_row = entity_rows.sample(n=1, random_state=None)
+                    random_top5_rows.append(random_row)
+
+        # Combine the randomly selected rows into a DataFrame
+        random_top5_df = (
+            pd.concat(random_top5_rows, ignore_index=True)
+            if random_top5_rows
+            else pd.DataFrame()
+        )
+
+        # Display the new DataFrame
+        if random_top5_df.empty:
+            st.warning(
+                "Nenhuma linha encontrada para os grupos de tipo_exame no mês selecionado."
+            )
+        else:
+            st.subheader(
+                "Amostra Aleatória de Linhas das Top 5 Entidades por Contagem de Linhas por Tipo de Exame"
+            )
+            st.dataframe(
+                random_top5_df.drop(
+                    columns=["plano", "percentagem", "honorarios", "quantidade"]
+                )
+            )
 
 
 def honorarios_por_exame(df):
