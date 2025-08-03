@@ -359,22 +359,35 @@ def check_susana(df, sispat):
 
 
 def honorarios_por_exame(df):
+    # Add year selection
+    years = df.expedido.dt.year.sort_values().unique().tolist()[::-1]
+    years.insert(0, "All Data")  # Add "All Data" option at the start
+    selected_year = st.selectbox("Ano", years, index=0)  # Default to "All Data"
+
+    # Filter by selected year, unless "All Data" is chosen
+    if selected_year != "All Data":
+        df = df[df.expedido.dt.year == int(selected_year)]
+
+    # Original calculations
     df["quantidade"] = df["quantidade"].fillna(1)
     df["pvp"] = df["pvp"] / df["quantidade"]
     df["honorarios"] = df["pvp"] * df["percentagem"]
     luz = df[~df.tipo_exame.str.contains("hba", case=False)]
     hba = df[df.tipo_exame.str.contains("hba", case=False)]
+
+    # Display tables
     cols = st.columns(2)
     cols[0].table(
         luz.groupby("tipo_exame")
         .honorarios.agg(["count", "min", "mean", "max"])
         .sort_values(by="count", ascending=False)
     )
-    cols[1].table(
-        hba.groupby("tipo_exame")
-        .honorarios.agg(["count", "min", "mean", "max"])
-        .sort_values(by="count", ascending=False)
-    )
+    if not hba.empty:
+        cols[1].table(
+            hba.groupby("tipo_exame")
+            .honorarios.agg(["count", "min", "mean", "max"])
+            .sort_values(by="count", ascending=False)
+        )
 
 
 def timeline_pvp(df):
