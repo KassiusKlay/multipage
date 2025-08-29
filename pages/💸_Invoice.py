@@ -169,9 +169,10 @@ def process_file_df(file_df):
     odivelas = process_df(file_df["Actividade HLOD"])
     cca = process_df(file_df["Actividade HLA"])
     cpp = process_df(file_df["Actividade HLO"])
+    xira = process_df(file_df["Actividade HLVFX"])
     estudos = process_df(file_df["Estudos"])
     df = (
-        pd.concat([hluz, torres, odivelas, cpp, cca, estudos], ignore_index=True)
+        pd.concat([hluz, torres, odivelas, cpp, cca, xira, estudos], ignore_index=True)
         .sort_values(by="entrada")
         .reset_index(drop=True)
         .dropna(subset="ano")
