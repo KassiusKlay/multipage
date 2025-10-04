@@ -5,6 +5,7 @@ import xlrd
 import bcrypt
 from db import engine
 from datetime import datetime
+from sqlalchemy import text
 
 
 def check_credentials():
@@ -28,99 +29,103 @@ def login():
         st.form_submit_button("Login", on_click=check_credentials)
 
 
-def upload_files():
-    stored_df, _ = get_stored_data()
+def diff_honorarios(uploaded_df, stored_df):
+    keys = [c for c in uploaded_df.columns if c not in ["pvp", "honorarios"]]
 
+    m = uploaded_df.merge(
+        stored_df,
+        on=keys,
+        how="left",
+        suffixes=("", "_stored"),
+    )
+
+    exist = m["pvp_stored"].notna() | m["honorarios_stored"].notna()
+
+    need_update = exist & (
+        (m["pvp"] != m["pvp_stored"]) | (m["honorarios"] != m["honorarios_stored"])
+    )
+
+    updates = m.loc[need_update, keys + ["pvp", "honorarios"]].copy()
+
+    inserts = m.loc[~exist, uploaded_df.columns].copy()
+
+    return keys, inserts, updates
+
+
+def apply_honorarios_changes(engine, keys, inserts, updates):
+    if not inserts.empty:
+        inserts.to_sql("honorarios", engine, if_exists="append", index=False)
+        st.success("Novos casos actualizados")
+    else:
+        st.info("Sem entradas novas")
+
+    if not updates.empty:
+        pk = ["ano", "nr_exame", "tipo_exame"]
+        updates = updates[pk + ["pvp", "honorarios"]].copy()
+        with engine.begin() as conn:
+            conn.execute(text("DROP TABLE IF EXISTS _honorarios_updates"))
+            cols = ", ".join([f'"{c}"' for c in (pk + ["pvp", "honorarios"])])
+            conn.execute(
+                text(
+                    f"""
+                CREATE TEMP TABLE _honorarios_updates AS
+                SELECT {cols} FROM honorarios LIMIT 0;
+            """
+                )
+            )
+            updates.to_sql("_honorarios_updates", conn, if_exists="append", index=False)
+
+            join_cond = " AND ".join([f'h."{k}" = u."{k}"' for k in pk])
+            res = conn.execute(
+                text(
+                    f"""
+                UPDATE honorarios h
+                   SET pvp = u.pvp,
+                       honorarios = u.honorarios
+                  FROM _honorarios_updates u
+                 WHERE {join_cond};
+            """
+                )
+            )
+
+        st.success(f"Updated rows: {res.rowcount}")
+    else:
+        st.info("Sem actualizacoes de casos antigos")
+        return
+    st.cache_data.clear()
+
+
+def upload_files():
+    # Retrieve stored data
+    stored_df, sispat_df = get_stored_data()
+
+    # Upload file
     uploaded_file = st.file_uploader(
-        "Carregar Ficheiro",
-        type="xlsb",
-        accept_multiple_files=False,
+        "Carregar Ficheiro", type="xlsb", accept_multiple_files=False
     )
 
     if uploaded_file:
         file_df = pd.read_excel(uploaded_file, None)
         uploaded_df = process_file_df(file_df)
-        merged_df = pd.merge(stored_df, uploaded_df, how="outer", indicator=True)
-        final_df = merged_df[merged_df["_merge"] == "right_only"]
-        final_df = final_df.drop("_merge", axis=1)
-        duplicates = final_df[
-            final_df.duplicated(subset=["ano", "nr_exame", "tipo_exame"], keep=False)
-        ]
-        if not duplicates.empty:
-            st.error("Linhas Duplicadas")
-            st.write(duplicates)
-            st.stop()
-        if not final_df.empty:
-            st.write(final_df)
-            final_df.to_sql("honorarios", engine, if_exists="append", index=False)
-            st.success("Ficheiro actualizado")
-            st.cache_data.clear()
-        else:
-            st.info("Sem entradas novas")
+        keys, inserts_df, updates_df = diff_honorarios(uploaded_df, stored_df)
+        apply_honorarios_changes(engine, keys, inserts_df, updates_df)
 
 
 def from_excel_datetime(x):
     return xlrd.xldate_as_datetime(x, 0)
 
 
+@st.cache_data
 def process_df(df):
-    df = df.dropna(axis=0, thresh=6)
-    df = df.dropna(axis=1, how="all").reset_index(drop=True)
-    if not df.columns[df.apply(lambda col: col.count() == 1)].empty:
-        df = df.loc[1:, df.apply(lambda col: col.count() != 1)]
-        if df.empty:
-            return
+    empty_rows = df.index[df.isna().all(axis=1)]
+
+    if len(empty_rows) > 0:
+        last_empty = empty_rows.max()
+        df = df.loc[last_empty + 1 :]
+        df = df.reset_index(drop=True)
     df.columns = df.iloc[0]
-    df.rename(columns={"QT": "qt imuno"}, inplace=True)
-    df = df[df["Ano"].astype(str).str.startswith("20")]
-
-    duplicates = df[df.duplicated(subset=["Ano", "Nº Exame"], keep=False)]
-    if not duplicates.empty:
-        grouped = (
-            duplicates.groupby(["Ano", "Nº Exame"])
-            .agg(
-                {
-                    "Honorários": "sum",
-                    "PVP": "sum",
-                    **{
-                        col: "first"
-                        for col in [
-                            "Entrada",
-                            "Mês Entrada",
-                            "Expedido",
-                            "Mês Exp.",
-                            "NHC",
-                            "Unidade",
-                            "Episódio",
-                            "Soarian",
-                            "Exame",
-                            "Cód. Facturação",
-                            "Patologista",
-                            "Entidade",
-                            "% Hon.",
-                            "qt imuno",
-                        ]
-                    },
-                }
-            )
-            .reset_index()
-        )
-        df = df[
-            ~df.set_index(["Ano", "Nº Exame"]).index.isin(
-                duplicates.set_index(["Ano", "Nº Exame"]).index
-            )
-        ]
-        df = pd.concat([df, grouped], ignore_index=True)
-
-    if (
-        "Estudo Imunocitoquímico (p/Anticorpo)" in df["Exame"].unique()
-        or "Estudo Imunocitoquímico (p/Anticorpo)" in df["Cód. Facturação"].unique()
-    ):
-        df["Exame"] = "Aditamento Imunocitoquímica"
-    else:
-        df["qt imuno"] = None
-    if "Plano SS" not in df.columns:
-        df["Plano SS"] = "Desconhecido"
+    if "QT" in df.columns:
+        df = df.rename(columns={"QT": "qt imuno"})
     df = df[
         [
             "Ano",
@@ -129,7 +134,6 @@ def process_df(df):
             "Expedido",
             "Exame",
             "Entidade",
-            "Plano SS",
             "PVP",
             "% Hon.",
             "Honorários",
@@ -144,25 +148,32 @@ def process_df(df):
         "expedido",
         "tipo_exame",
         "entidade",
-        "plano",
         "pvp",
         "percentagem",
         "honorarios",
         "quantidade",
         "unidade",
     ]
+    df = df[df["ano"].astype(str).str.startswith("20")]
     df[["entrada", "expedido"]] = df[["entrada", "expedido"]].map(from_excel_datetime)
     df["ano"] = df["ano"].astype("int64")
     df["nr_exame"] = df["nr_exame"].astype("int64")
     df["pvp"] = df["pvp"].astype("float").round(3)
     df["honorarios"] = df["honorarios"].astype("float").round(3)
     df["percentagem"] = df["percentagem"].astype("float").round(3)
-    df.pvp = df.pvp.abs()
-    df.honorarios = df.honorarios.abs()
-    df = df.drop_duplicates(keep=False)
+    df["quantidade"] = df["quantidade"].astype("float")
+    cols = [c for c in df.columns if c not in ["pvp", "honorarios"]]
+
+    df = df.loc[df.groupby(cols, dropna=False)["pvp"].idxmax()].reset_index(drop=True)
+    if "Estudo Imunocitoquímico (p/Anticorpo)" in df["tipo_exame"].unique():
+        df["tipo_exame"] = "Aditamento Imunocitoquímica"
+    else:
+        df = df.drop(columns=["quantidade"])
+
     return df
 
 
+@st.cache_data
 def process_file_df(file_df):
     hluz = process_df(file_df["Actividade HLUZ"])
     torres = process_df(file_df["Actividade HLTL"])
@@ -175,8 +186,8 @@ def process_file_df(file_df):
         pd.concat([hluz, torres, odivelas, cpp, cca, xira, estudos], ignore_index=True)
         .sort_values(by="entrada")
         .reset_index(drop=True)
-        .dropna(subset="ano")
     )
+
     return df
 
 
@@ -353,9 +364,7 @@ def check_susana(df, sispat):
                 "Amostra Aleatória de Linhas das Top 5 Entidades por Contagem de Linhas por Tipo de Exame"
             )
             st.dataframe(
-                random_top5_df.drop(
-                    columns=["plano", "percentagem", "honorarios", "quantidade"]
-                )
+                random_top5_df.drop(columns=["percentagem", "honorarios", "quantidade"])
             )
 
 
