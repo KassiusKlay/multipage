@@ -30,7 +30,10 @@ def login():
 
 
 def diff_honorarios(uploaded_df, stored_df):
-    keys = [c for c in uploaded_df.columns if c not in ["pvp", "honorarios"]]
+    # columns we allow to change
+    update_cols = ["pvp", "honorarios", "unidade"]
+    # keys are everything else
+    keys = [c for c in uploaded_df.columns if c not in update_cols]
 
     m = uploaded_df.merge(
         stored_df,
@@ -39,14 +42,15 @@ def diff_honorarios(uploaded_df, stored_df):
         suffixes=("", "_stored"),
     )
 
-    exist = m["pvp_stored"].notna() | m["honorarios_stored"].notna()
+    exist = m[[c + "_stored" for c in update_cols]].notna().any(axis=1)
 
     need_update = exist & (
-        (m["pvp"] != m["pvp_stored"]) | (m["honorarios"] != m["honorarios_stored"])
+        (m["pvp"] != m["pvp_stored"])
+        | (m["honorarios"] != m["honorarios_stored"])
+        | (m["unidade"].fillna("") != m["unidade_stored"].fillna(""))
     )
 
-    updates = m.loc[need_update, keys + ["pvp", "honorarios"]].copy()
-
+    updates = m.loc[need_update, keys + update_cols].copy()
     inserts = m.loc[~exist, uploaded_df.columns].copy()
 
     return keys, inserts, updates
@@ -61,10 +65,13 @@ def apply_honorarios_changes(engine, keys, inserts, updates):
 
     if not updates.empty:
         pk = ["ano", "nr_exame", "tipo_exame"]
-        updates = updates[pk + ["pvp", "honorarios"]].copy()
+        update_cols = ["pvp", "honorarios", "unidade", "expedido"]
+
+        updates = updates[pk + update_cols].copy()
+
         with engine.begin() as conn:
             conn.execute(text("DROP TABLE IF EXISTS _honorarios_updates"))
-            cols = ", ".join([f'"{c}"' for c in (pk + ["pvp", "honorarios"])])
+            cols = ", ".join([f'"{c}"' for c in (pk + update_cols)])
             conn.execute(
                 text(
                     f"""
@@ -76,12 +83,13 @@ def apply_honorarios_changes(engine, keys, inserts, updates):
             updates.to_sql("_honorarios_updates", conn, if_exists="append", index=False)
 
             join_cond = " AND ".join([f'h."{k}" = u."{k}"' for k in pk])
+            set_clause = ", ".join([f"{c} = u.{c}" for c in update_cols])
+
             res = conn.execute(
                 text(
                     f"""
                 UPDATE honorarios h
-                   SET pvp = u.pvp,
-                       honorarios = u.honorarios
+                   SET {set_clause}
                   FROM _honorarios_updates u
                  WHERE {join_cond};
             """
@@ -91,7 +99,7 @@ def apply_honorarios_changes(engine, keys, inserts, updates):
         st.success(f"Updated rows: {res.rowcount}")
     else:
         st.info("Sem actualizacoes de casos antigos")
-        return
+
     st.cache_data.clear()
 
 
@@ -233,18 +241,44 @@ def check_susana(df, sispat):
             & ~(sispat.tipo_exame.str.contains("Tipagem"))
             & (sispat.patologista == "Dr. João Cassis")
         ]
-        diff = list(set(sispat.nr_exame.tolist()) - set(df_filtered.nr_exame.tolist()))
-        diff = sispat[sispat.nr_exame.isin(diff)]
-        if diff.empty:
-            st.success("Tudo contemplado")
-        else:
-            st.warning("Exames não contemplados")
-            st.write(diff)
+
         imuno_sispat = sispat.imuno.sum()
-        imuno_susana = df_filtered[
-            df_filtered.tipo_exame.str.contains("Aditamento")
-        ].quantidade.sum()
-        st.write("Imuno real:", imuno_sispat, "Imuno Honorarios:", imuno_susana)
+        imuno_susana = (
+            df_filtered[df_filtered.tipo_exame.str.contains("Aditamento")]
+            .quantidade.sum()
+            .astype(int)
+        )
+        st.write("Imuno sispat:", imuno_sispat, "Imuno Honorarios:", imuno_susana)
+
+        casos_sispat = sispat[~sispat.tipo_exame.str.contains("Aditamento")].shape[0]
+        casos_susana = df_filtered[
+            ~df_filtered.tipo_exame.str.contains("Aditamento")
+        ].shape[0]
+        st.write("Casos sispat:", casos_sispat, "Casos Honorarios:", casos_susana)
+        if casos_sispat != casos_susana:
+            # Sispat not in Susana
+            diff_sispat = list(
+                set(sispat.nr_exame.tolist()) - set(df_filtered.nr_exame.tolist())
+            )
+            diff_sispat = sispat[sispat.nr_exame.isin(diff_sispat)]
+            if not diff_sispat.empty:
+                st.warning("Exames em Sispat mas não em Honorarios")
+                st.write(diff_sispat)
+
+            # Susana not in Sispat
+            diff_susana = list(
+                set(df_filtered.nr_exame.tolist()) - set(sispat.nr_exame.tolist())
+            )
+            diff_susana = df_filtered[df_filtered.nr_exame.isin(diff_susana)]
+            if not diff_susana.empty:
+                st.warning("Exames em Honorarios mas não em Sispat")
+                st.write(diff_susana)
+            dupes = df_filtered[
+                df_filtered.duplicated(
+                    subset=["ano", "nr_exame", "tipo_exame"], keep=False
+                )
+            ]
+            st.write("Duplicados em Honorarios:", dupes)
 
         selected_grouped = (
             df_filtered.groupby(["tipo_exame", "entidade"])["pvp"].mean().reset_index()
