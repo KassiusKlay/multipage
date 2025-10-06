@@ -30,54 +30,61 @@ def login():
 
 
 def diff_honorarios(uploaded_df, stored_df):
-    # columns we allow to change
-    update_cols = ["pvp", "honorarios", "unidade"]
-    # keys are everything else
-    keys = [c for c in uploaded_df.columns if c not in update_cols]
+    pk = ["ano", "nr_exame", "tipo_exame"]
+    compare_cols = ["pvp", "honorarios"]
 
     m = uploaded_df.merge(
         stored_df,
-        on=keys,
+        on=pk,
         how="left",
         suffixes=("", "_stored"),
+        indicator=True,
     )
 
-    exist = m[[c + "_stored" for c in update_cols]].notna().any(axis=1)
+    # 1. Inserts
+    inserts = m[m["_merge"] == "left_only"][uploaded_df.columns].copy()
 
-    need_update = exist & (
-        (m["pvp"] != m["pvp_stored"])
-        | (m["honorarios"] != m["honorarios_stored"])
-        | (m["unidade"].fillna("") != m["unidade_stored"].fillna(""))
+    # 2. Compare only rows present in both
+    diffs = m[m["_merge"] == "both"].copy()
+
+    # Updates: uploaded > stored
+    need_update = (diffs["pvp"] > diffs["pvp_stored"]) | (
+        diffs["honorarios"] > diffs["honorarios_stored"]
     )
+    updates = diffs.loc[need_update, pk + compare_cols].copy()
 
-    updates = m.loc[need_update, keys + update_cols].copy()
-    inserts = m.loc[~exist, uploaded_df.columns].copy()
+    # Warnings: uploaded < stored
+    need_warn = (diffs["pvp"] < diffs["pvp_stored"]) | (
+        diffs["honorarios"] < diffs["honorarios_stored"]
+    )
+    warnings = diffs.loc[need_warn, pk + compare_cols].copy()
 
-    return keys, inserts, updates
+    return pk, inserts, updates, warnings
 
 
-def apply_honorarios_changes(engine, keys, inserts, updates):
+def apply_honorarios_changes(engine, pk, inserts, updates, warnings):
+    if not warnings.empty:
+        st.warning("Casos com pvp/honorarios menores que armazenados")
+        st.write(warnings)
+        st.stop()  # stop before doing anything else
+
     if not inserts.empty:
         inserts.to_sql("honorarios", engine, if_exists="append", index=False)
-        st.success("Novos casos actualizados")
+        st.success(f"{len(inserts)} novos casos inseridos")
     else:
-        st.info("Sem entradas novas")
+        st.info("Sem novas entradas")
 
     if not updates.empty:
-        pk = ["ano", "nr_exame", "tipo_exame"]
-        update_cols = ["pvp", "honorarios", "unidade", "expedido"]
-
-        updates = updates[pk + update_cols].copy()
-
+        update_cols = ["pvp", "honorarios"]
         with engine.begin() as conn:
             conn.execute(text("DROP TABLE IF EXISTS _honorarios_updates"))
             cols = ", ".join([f'"{c}"' for c in (pk + update_cols)])
             conn.execute(
                 text(
                     f"""
-                CREATE TEMP TABLE _honorarios_updates AS
-                SELECT {cols} FROM honorarios LIMIT 0;
-            """
+                    CREATE TEMP TABLE _honorarios_updates AS
+                    SELECT {cols} FROM honorarios LIMIT 0;
+                    """
                 )
             )
             updates.to_sql("_honorarios_updates", conn, if_exists="append", index=False)
@@ -88,17 +95,16 @@ def apply_honorarios_changes(engine, keys, inserts, updates):
             res = conn.execute(
                 text(
                     f"""
-                UPDATE honorarios h
-                   SET {set_clause}
-                  FROM _honorarios_updates u
-                 WHERE {join_cond};
-            """
+                    UPDATE honorarios h
+                       SET {set_clause}
+                      FROM _honorarios_updates u
+                     WHERE {join_cond};
+                    """
                 )
             )
-
         st.success(f"Updated rows: {res.rowcount}")
     else:
-        st.info("Sem actualizacoes de casos antigos")
+        st.info("Sem actualizações")
 
     st.cache_data.clear()
 
@@ -115,8 +121,10 @@ def upload_files():
     if uploaded_file:
         file_df = pd.read_excel(uploaded_file, None)
         uploaded_df = process_file_df(file_df)
-        keys, inserts_df, updates_df = diff_honorarios(uploaded_df, stored_df)
-        apply_honorarios_changes(engine, keys, inserts_df, updates_df)
+        pk, inserts_df, updates_df, warnings_df = diff_honorarios(
+            uploaded_df, stored_df
+        )
+        apply_honorarios_changes(engine, pk, inserts_df, updates_df, warnings_df)
 
 
 def from_excel_datetime(x):
