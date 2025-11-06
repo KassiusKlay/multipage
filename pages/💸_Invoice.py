@@ -473,7 +473,7 @@ def timeline_pvp(df):
         .add_params(selection)
     )
     layer = (line).configure_view(strokeWidth=0).configure_axis(grid=False)
-    st.altair_chart(layer, use_container_width=True)
+    st.altair_chart(layer)
 
 
 def mean_pvp_biopsia(df):
@@ -553,9 +553,7 @@ def mean_pvp_biopsia(df):
                 )
             )
             st.write(f"#### {entidade}")
-            st.altair_chart(
-                (bar + text).configure_axis(labelLimit=0), use_container_width=False
-            )
+            st.altair_chart((bar + text).configure_axis(labelLimit=0))
 
 
 def faturacao(df, sispat):
@@ -582,7 +580,7 @@ def faturacao(df, sispat):
         )
         .properties(width=600, height=400)
     )
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart)
 
     years = df["ano"].sort_values().unique()
     cols = st.columns(len(years))
@@ -603,7 +601,7 @@ def faturacao(df, sispat):
                 title=f"Year: {year}",
             )
         )
-        cols[i].altair_chart(chart_year, use_container_width=True)
+        cols[i].altair_chart(chart_year)
 
 
 def percentage_entidades(df):

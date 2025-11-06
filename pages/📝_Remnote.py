@@ -59,7 +59,7 @@ if option == "Main Page":
     st.write(f"Showing {len(filtered_df)} images:")
 
     for _, row in filtered_df.iterrows():
-        st.image(row["url"], use_container_width=True)
+        st.image(row["url"], )
         st.caption(
             f"Area: {row['area']} | Organ: {row['organ']} | Type: {row['type']} | Tag: {row['tag'] or '—'}"
         )
@@ -113,7 +113,7 @@ elif option == "Upload Files":
 
             st.write("New URLs:")
             url = new_urls[st.session_state.index]
-            st.image(url, use_container_width=True)
+            st.image(url, )
             st.markdown(f"**URL:** {url}")
 
             area = st.selectbox("Area", ["GastroIntestinal", "Urology"])

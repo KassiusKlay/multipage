@@ -317,7 +317,7 @@ def show_transaction_history(transaction_df):
         )
         .interactive()
     )
-    st.altair_chart(line + circle, use_container_width=True)
+    st.altair_chart(line + circle, )
 
 
 def get_portfolio_df(info):

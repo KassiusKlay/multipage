@@ -63,7 +63,7 @@ def create_bar_chart(data, title):
         )
         .properties(title=title)
     )
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart)
 
 
 def show_dashboard():
@@ -123,7 +123,7 @@ def show_dashboard():
             title="Average Monthly Spend by Category (Excluding Income and Investments)",
         )
     )
-    st.altair_chart(monthly_averages_chart, use_container_width=True)
+    st.altair_chart(monthly_averages_chart)
 
     # Calculate and display percentage of investments in relation to income
     total_investments = df[df["category"] == "Investments"]["amount"].sum()

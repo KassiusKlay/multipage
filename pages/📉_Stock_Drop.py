@@ -142,7 +142,7 @@ chart = (
     .configure_axisX(tickCount="year")
     .configure_axis(title=None, grid=False)
 )
-st.altair_chart(chart, use_container_width=True)
+st.altair_chart(chart, )
 
 st.write(
     drop_df[:-1]
@@ -189,4 +189,4 @@ line = (
 
 chart = line.configure_view(stroke=None).configure_axis(grid=False)
 st.title(f"{ticker} vs SP500")
-st.altair_chart(chart, use_container_width=True)
+st.altair_chart(chart, )
