@@ -47,127 +47,121 @@ def main():
         upload_files()
 
 
-def create_bar_chart(data, title):
-    chart = (
-        alt.Chart(data)
-        .mark_bar()
-        .encode(
-            x=alt.X(
-                "category:O",
-                sort=alt.EncodingSortField(
-                    field="amount", op="sum", order="descending"
-                ),
-            ),
-            y=alt.Y("sum(amount):Q"),
-            tooltip=["category", "sum(amount)"],
-        )
-        .properties(title=title)
-    )
-    st.altair_chart(chart)
-
-
-EXCLUDE = {"Taxes", "Investments", "Income"}
-
-
-def _ensure_dt(df):
-    if not pd.api.types.is_datetime64_any_dtype(df["date"]):
-        df["date"] = pd.to_datetime(df["date"])
-    return df
-
-
-def _monthly_totals(df):
-    m = df.copy()
-    m["month"] = m["date"].dt.to_period("M").dt.to_timestamp()
-    return m.groupby(["category", "month"], as_index=False)["amount"].sum()
-
-
-def _avg_monthly_by_category(df):
-    # average of monthly totals per category (excluding EXCLUDE)
-    mt = _monthly_totals(df[~df["category"].isin(EXCLUDE)])
-    return (
-        mt.groupby("category", as_index=False)["amount"]
-        .mean()
-        .sort_values("amount", ascending=False)
-    )
-
-
-def _avg_monthly_by_year_and_category(df):
-    # for each year+category, compute avg per month (exclude EXCLUDE)
-    f = df[~df["category"].isin(EXCLUDE)].copy()
-    f["month"] = f["date"].dt.to_period("M").dt.to_timestamp()
-    mt = f.groupby(["category", "month"], as_index=False)["amount"].sum()
-    mt["year"] = mt["month"].dt.year
-    return mt.groupby(["category", "year"], as_index=False)["amount"].mean()
-
-
-def _avg_per_month_for(df, category_name):
-    sub = df[df["category"] == category_name]
-    if sub.empty:
-        return 0.0
-    mt = _monthly_totals(sub)
-    return float(mt["amount"].mean())
-
-
 def show_dashboard():
     st.title("Dashboard")
-
     df = get_stored_data()
-    df = df[df["category"] != "Ignore"].copy()
-    df = _ensure_dt(df)
 
-    # --- 1) Bar: avg monthly spend by category (exclude Taxes/Investments/Income)
-    avg_monthly = _avg_monthly_by_category(df)
+    # --- CORE: NUMBER OF MONTHS ---
+    df["month"] = df["date"].dt.to_period("M")
+    n_months = df["month"].nunique()
+    st.caption(f"**Data coverage:** {n_months} distinct months")
+
+    # --- EXCLUDE CATEGORIES ---
+    EXCLUDE = {"Taxes", "Investments", "Income", "Ignore", "Salary", "Job"}
+
+    # ==============================================================
+    # 1. BAR CHART: Avg monthly spend per category (total / n_months)
+    # ==============================================================
+    spend_df = df[~df["category"].isin(EXCLUDE)]
+    totals_by_cat = spend_df.groupby("category")["amount"].sum()
+    avg_by_cat = totals_by_cat / n_months
+    avg_by_cat = avg_by_cat.sort_values(ascending=False).reset_index()
+    avg_by_cat.columns = ["category", "amount"]
+
     bar = (
-        alt.Chart(avg_monthly)
+        alt.Chart(avg_by_cat)
         .mark_bar()
         .encode(
             x=alt.X("category:N", sort="-y", title="Category"),
             y=alt.Y("amount:Q", title="Avg monthly spend"),
-            tooltip=[alt.Tooltip("category:N"), alt.Tooltip("amount:Q", format=",.2f")],
+            tooltip=[
+                alt.Tooltip("category:N"),
+                alt.Tooltip("amount:Q", format=",.0f", title="Avg/month"),
+            ],
         )
-        .properties(
-            title="Average Monthly Spend by Category (Excl. Taxes, Investments, Income)"
-        )
+        .properties(title="Average Monthly Spend by Category")
     )
-    st.altair_chart(bar)
+    st.altair_chart(bar, use_container_width=True)
 
-    # --- 2) Line: avg expenses per year, lines per category (exclude Taxes/Investments/Income)
-    yearly = _avg_monthly_by_year_and_category(df)
+    # ==============================================================
+    # 2. LINE CHART: Avg monthly spend PER YEAR (correctly)
+    # ==============================================================
+    # First: count how many months of data exist per year
+    spend_df["year"] = spend_df["date"].dt.year
+    spend_df["month"] = spend_df["date"].dt.to_period("M")
+
+    # Total spent per category & year
+    yearly_totals = spend_df.groupby(["category", "year"])["amount"].sum().reset_index()
+
+    # Count distinct months per year (across all data — not just this category)
+    months_in_year = spend_df.groupby("year")["month"].nunique().reset_index()
+    months_in_year.columns = ["year", "months_in_year"]
+
+    # Merge to get correct divisor
+    yearly_avg = yearly_totals.merge(months_in_year, on="year")
+    yearly_avg["avg_monthly"] = yearly_avg["amount"] / yearly_avg["months_in_year"]
+
+    # Clean up for chart
+    yearly_avg = yearly_avg[["category", "year", "avg_monthly"]]
+
+    # Plot
     sel = alt.selection_point(fields=["category"], bind="legend")
     line = (
-        alt.Chart(yearly)
+        alt.Chart(yearly_avg)
         .mark_line(point=True)
         .encode(
             x=alt.X("year:O", title="Year"),
-            y=alt.Y("amount:Q", title="Avg monthly spend in year"),
+            y=alt.Y("avg_monthly:Q", title="Avg monthly spend in year"),
             color=alt.Color("category:N", legend=alt.Legend(title="Category")),
-            opacity=alt.condition(sel, alt.value(1.0), alt.value(0.15)),
+            opacity=alt.condition(sel, alt.value(1), alt.value(0.2)),
             tooltip=[
                 alt.Tooltip("year:O", title="Year"),
                 alt.Tooltip("category:N", title="Category"),
-                alt.Tooltip("amount:Q", title="Avg/month", format=",.2f"),
+                alt.Tooltip("avg_monthly:Q", title="Avg/month", format=",.0f"),
             ],
         )
         .add_params(sel)
-        .properties(title="Avg Expenses per Year (Excl. Taxes, Investments, Income)")
+        .properties(title="Average Monthly Spend per Year (per actual months in year)")
     )
-    st.altair_chart(line)
+    st.altair_chart(line, use_container_width=True)
 
-    # --- 3) Three columns: avg per month for Income, Taxes, Investments
-    c1, c2, c3 = st.columns(3)
-    avg_income = _avg_per_month_for(df, "Income")
-    avg_taxes = _avg_per_month_for(df, "Taxes")
-    avg_invest = _avg_per_month_for(df, "Investments")
+    # ==============================================================
+    # 3. METRICS: Income, Taxes, Investments
+    # ==============================================================
+    def avg_for(cat):
+        total = df[df["category"] == cat]["amount"].sum()
+        return total / n_months if n_months > 0 else 0.0
 
-    c1.metric("Income — Avg/month", f"€{avg_income:,.2f}")
-    c2.metric("Taxes — Avg/month", f"€{avg_taxes:,.2f}")
-    c3.metric("Investments — Avg/month", f"€{avg_invest:,.2f}")
+    avg_income = avg_for("Income")
+    avg_taxes = avg_for("Taxes")
+    avg_invest = avg_for("Investments")
 
-    # --- 4) Investments as % of Income (using totals)
-    total_investments = float(df.loc[df["category"] == "Investments", "amount"].sum())
-    total_income = float(df.loc[df["category"] == "Income", "amount"].sum())
-    pct = (total_investments / total_income * 100.0) if total_income else 0.0
-    st.metric("Investments as % of Income", f"{pct:.2f}%")
+    # NEW: Total spend (excluding EXCLUDE)
+    total_spend = spend_df["amount"].sum()
+    avg_spend = total_spend / n_months if n_months > 0 else 0.0
+
+    # 4-column layout
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Income — Avg/month", f"€{avg_income:,.0f}")
+    c2.metric("Taxes — Avg/month", f"€{avg_taxes:,.0f}")
+    c3.metric("Investments — Avg/month", f"€{avg_invest:,.0f}")
+    c4.metric("**Total Spend — Avg/month**", f"€{avg_spend:,.0f}")
+
+    # ==============================================================
+    # 4. Investments % of Income
+    # ==============================================================
+    total_income = df[df["category"] == "Income"]["amount"].sum()
+    total_invest = df[df["category"] == "Investments"]["amount"].sum()
+    pct = (total_invest / total_income * 100) if total_income > 0 else 0
+    st.metric("Investments as % of Income", f"{pct:.1f}%")
+
+    # ==============================================================
+    # 5. Summary Footer
+    # ==============================================================
+    st.caption(
+        f"All averages = **total amount ÷ {n_months} months** | "
+        f"Data from {df['date'].min().strftime('%b %Y')} to {df['date'].max().strftime('%b %Y')}"
+    )
 
 
 @st.cache_data
