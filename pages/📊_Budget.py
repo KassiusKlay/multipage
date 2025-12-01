@@ -62,7 +62,7 @@ def show_dashboard():
     # ==============================================================
     # 1. BAR CHART: Avg monthly spend per category (total / n_months)
     # ==============================================================
-    spend_df = df[~df["category"].isin(EXCLUDE)]
+    spend_df = df[~df["category"].isin(EXCLUDE)].copy()
     totals_by_cat = spend_df.groupby("category")["amount"].sum()
     avg_by_cat = totals_by_cat / n_months
     avg_by_cat = avg_by_cat.sort_values(ascending=False).reset_index()
@@ -81,7 +81,7 @@ def show_dashboard():
         )
         .properties(title="Average Monthly Spend by Category")
     )
-    st.altair_chart(bar, use_container_width=True)
+    st.altair_chart(bar, width="stretch")
 
     # ==============================================================
     # 2. LINE CHART: Avg monthly spend PER YEAR (correctly)
@@ -123,7 +123,7 @@ def show_dashboard():
         .add_params(sel)
         .properties(title="Average Monthly Spend per Year (per actual months in year)")
     )
-    st.altair_chart(line, use_container_width=True)
+    st.altair_chart(line, width="stretch")
 
     # ==============================================================
     # 3. METRICS: Income, Taxes, Investments
