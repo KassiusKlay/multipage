@@ -13,8 +13,8 @@ def render_raw_data_tab(matches, points, shots):
     data_type = st.selectbox("Select data type:", ["Matches", "Points", "Shots"])
 
     if data_type == "Matches":
-        st.dataframe(matches, use_container_width=True)
+        st.dataframe(matches, width='stretch')
     elif data_type == "Points":
-        st.dataframe(points, use_container_width=True)
+        st.dataframe(points, width='stretch')
     else:
-        st.dataframe(shots, use_container_width=True)
+        st.dataframe(shots, width='stretch')

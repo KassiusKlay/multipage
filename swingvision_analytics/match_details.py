@@ -67,4 +67,4 @@ def render_match_details_tab(matches, points, shots, match_metrics_df):
                         "detail",
                     ]
                 ]
-                st.dataframe(recent_points, use_container_width=True)
+                st.dataframe(recent_points, width='stretch')

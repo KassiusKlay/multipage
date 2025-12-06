@@ -90,7 +90,7 @@ def render_performance_evolution_tab(matches, points, shots, match_metrics_df):
             evolution_fig_1 = create_evolution_chart(
                 match_metrics_df, selected_metric_1
             )
-            st.plotly_chart(evolution_fig_1, use_container_width=True, key="chart_1")
+            st.plotly_chart(evolution_fig_1, width='stretch', key="chart_1")
 
     with col2:
         # Second metric selector
@@ -110,7 +110,7 @@ def render_performance_evolution_tab(matches, points, shots, match_metrics_df):
             evolution_fig_2 = create_evolution_chart(
                 match_metrics_df, selected_metric_2
             )
-            st.plotly_chart(evolution_fig_2, use_container_width=True, key="chart_2")
+            st.plotly_chart(evolution_fig_2, width='stretch', key="chart_2")
 
     # Detailed metrics table
     st.subheader("Match Metrics Table")
@@ -121,4 +121,4 @@ def render_performance_evolution_tab(matches, points, shots, match_metrics_df):
         for col in percentage_cols:
             formatted_df[col] = formatted_df[col].map("{:.1%}".format)
 
-        st.dataframe(formatted_df, use_container_width=True)
+        st.dataframe(formatted_df, width='stretch')

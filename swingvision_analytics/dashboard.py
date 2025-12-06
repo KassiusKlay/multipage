@@ -216,11 +216,11 @@ def render_dashboard_tab(matches, points, shots, match_metrics_df):
 
     # Performance dashboard
     dashboard_fig = create_performance_dashboard(match_metrics_df)
-    st.plotly_chart(dashboard_fig, use_container_width=True, theme="streamlit")
+    st.plotly_chart(dashboard_fig, width='stretch', theme="streamlit")
 
     # Match comparison
     comparison_fig = create_match_comparison_chart(match_metrics_df)
-    st.plotly_chart(comparison_fig, use_container_width=True, theme="streamlit")
+    st.plotly_chart(comparison_fig, width='stretch', theme="streamlit")
 
     # Recent matches summary
     st.subheader("Recent Matches")
@@ -245,5 +245,5 @@ def render_dashboard_tab(matches, points, shots, match_metrics_df):
                     "aces": "{:.0f}",
                 }
             ),
-            use_container_width=True,
+            width='stretch',
         )

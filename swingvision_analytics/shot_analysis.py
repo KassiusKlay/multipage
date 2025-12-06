@@ -370,7 +370,7 @@ def render_shot_analysis_tab(matches, points, shots):
                         "error_pct": "{:.1%}",
                     }
                 ),
-                use_container_width=True,
+                width='stretch',
             )
 
     with col2:
@@ -386,7 +386,7 @@ def render_shot_analysis_tab(matches, points, shots):
                         "opp_win_count": "{:.0f}",
                     }
                 ),
-                use_container_width=True,
+                width='stretch',
             )
 
     # Error vs Success Analysis
@@ -394,7 +394,7 @@ def render_shot_analysis_tab(matches, points, shots):
     comparison_df = compare_error_vs_success_factors(shots)
     if not comparison_df.empty:
         st.write("**What conditions lead to errors vs success on your shots:**")
-        st.dataframe(comparison_df, use_container_width=True)
+        st.dataframe(comparison_df, width='stretch')
     else:
         st.info("Not enough data for error vs success comparison analysis.")
 
@@ -412,7 +412,7 @@ def render_shot_analysis_tab(matches, points, shots):
                     "In Play Rate": "{:.1%}",
                 }
             ),
-            use_container_width=True,
+            width='stretch',
         )
 
         # Key insights

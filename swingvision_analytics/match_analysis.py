@@ -371,12 +371,12 @@ def render_match_analysis_tab(matches, points, shots):
     )
 
     net_points_fig = create_net_points_breakdown_chart(analytics_df)
-    st.plotly_chart(net_points_fig, use_container_width=True, theme="streamlit")
+    st.plotly_chart(net_points_fig, width='stretch', theme="streamlit")
 
     # Performance Comparison Dashboard
     st.subheader("📈 Won vs Lost Matches Analysis")
     dashboard_fig = create_performance_comparison_dashboard(analytics_df)
-    st.plotly_chart(dashboard_fig, use_container_width=True, theme="streamlit")
+    st.plotly_chart(dashboard_fig, width='stretch', theme="streamlit")
 
     # Detailed Data
     st.subheader("📋 Detailed Analytics Data")
@@ -419,7 +419,7 @@ def render_match_analysis_tab(matches, points, shots):
     ]
 
     display_cols = [col for col in column_order if col in display_df.columns]
-    st.dataframe(display_df[display_cols], use_container_width=True)
+    st.dataframe(display_df[display_cols], width='stretch')
 
     # Download button
     csv = display_df.to_csv(index=False)

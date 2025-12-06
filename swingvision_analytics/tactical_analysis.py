@@ -623,7 +623,7 @@ def render_tactical_analysis_tab(matches, points, shots):
         if not first_point_stats.empty:
             st.dataframe(
                 first_point_stats.style.format({"win_pct": "{:.1%}"}),
-                use_container_width=True,
+                width='stretch',
             )
 
     with col2:
@@ -632,7 +632,7 @@ def render_tactical_analysis_tab(matches, points, shots):
         if not serve_first_stats.empty:
             st.dataframe(
                 serve_first_stats.style.format({"win_pct": "{:.1%}"}),
-                use_container_width=True,
+                width='stretch',
             )
 
     st.subheader("🎾 Rally Length Performance Analysis")
@@ -643,7 +643,7 @@ def render_tactical_analysis_tab(matches, points, shots):
             rally_performance.style.format(
                 {"Win_Rate": "{:.1%}", "Avg_Rally_Length": "{:.1f}"}
             ),
-            use_container_width=True,
+            width='stretch',
         )
     else:
         st.info("Not enough rally data for analysis.")
@@ -659,7 +659,7 @@ def render_tactical_analysis_tab(matches, points, shots):
         if not score_perf.empty:
             st.dataframe(
                 score_perf.style.format({"Win_Rate": "{:.1%}"}),
-                use_container_width=True,
+                width='stretch',
             )
 
     with col2:
@@ -667,7 +667,7 @@ def render_tactical_analysis_tab(matches, points, shots):
         if not critical_perf.empty:
             st.dataframe(
                 critical_perf.style.format({"Win_Rate": "{:.1%}"}),
-                use_container_width=True,
+                width='stretch',
             )
 
     # SET TIE-BREAKS ANALYSIS
@@ -721,7 +721,7 @@ def render_tactical_analysis_tab(matches, points, shots):
             display_df[
                 ["opponent", "set", "final_score", "Result", "First to 3", "First to 5"]
             ],
-            use_container_width=True,
+            width='stretch',
         )
 
     else:
@@ -802,7 +802,7 @@ def render_tactical_analysis_tab(matches, points, shots):
                     "Reached MP",
                 ]
             ],
-            use_container_width=True,
+            width='stretch',
         )
 
     else:
@@ -816,7 +816,7 @@ def render_tactical_analysis_tab(matches, points, shots):
         st.write("**Performance in Pressure Situations:**")
         st.dataframe(
             overall_clutch.style.format({"Win_Rate": "{:.1%}"}),
-            use_container_width=True,
+            width='stretch',
         )
     else:
         st.info("Not enough clutch situation data for analysis.")
