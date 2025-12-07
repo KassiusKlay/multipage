@@ -636,15 +636,20 @@ def main_page():
         faturacao(df.copy(), sispat.copy())
 
 
-if "logged_in" not in st.session_state:
-    login()
-    st.stop()
+def main():
+    if "logged_in" not in st.session_state:
+        login()
+        st.stop()
 
-option = st.sidebar.radio(
-    "options", ["Ver Dados", "Carregar Ficheiros"], label_visibility="collapsed"
-)
+    option = st.sidebar.radio(
+        "options", ["Ver Dados", "Carregar Ficheiros"], label_visibility="collapsed"
+    )
 
-if option == "Ver Dados":
-    main_page()
-else:
-    upload_files()
+    if option == "Ver Dados":
+        main_page()
+    else:
+        upload_files()
+
+
+if __name__ == "__main__":
+    main()
