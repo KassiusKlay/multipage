@@ -1,29 +1,7 @@
 import streamlit as st
 import pandas as pd
 import altair as alt
-import bcrypt
 from db import engine
-
-
-def check_credentials():
-    if (
-        not st.session_state.username
-        or not st.session_state.password
-        or st.session_state.username != st.secrets["app"]["user"]
-        or not bcrypt.checkpw(
-            st.session_state.password.encode(), st.secrets["app"]["password"].encode()
-        )
-    ):
-        st.warning("Tente novamente")
-    else:
-        st.session_state.logged_in = True
-
-
-def login():
-    with st.form("login"):
-        st.text_input("Username", key="username")
-        st.text_input("Password", key="password", type="password")
-        st.form_submit_button("Login", on_click=check_credentials)
 
 
 @st.cache_data
@@ -32,10 +10,6 @@ def get_stored_data():
 
 
 def main():
-    if "logged_in" not in st.session_state:
-        login()
-        st.stop()
-
     st.sidebar.title("Navigation")
     choice = st.sidebar.radio(
         "options", ["Dashboard", "Upload Files"], label_visibility="hidden"

@@ -2,31 +2,9 @@ import streamlit as st
 import pandas as pd
 import altair as alt
 import xlrd
-import bcrypt
 from db import engine
 from datetime import datetime
 from sqlalchemy import text
-
-
-def check_credentials():
-    if (
-        not st.session_state.username
-        or not st.session_state.password
-        or st.session_state.username != st.secrets["app"]["user"]
-        or not bcrypt.checkpw(
-            st.session_state.password.encode(), st.secrets["app"]["password"].encode()
-        )
-    ):
-        st.warning("Tente novamente")
-    else:
-        st.session_state.logged_in = True
-
-
-def login():
-    with st.form("login"):
-        st.text_input("Username", key="username")
-        st.text_input("Password", key="password", type="password")
-        st.form_submit_button("Login", on_click=check_credentials)
 
 
 def diff_honorarios(uploaded_df, stored_df):
@@ -637,10 +615,6 @@ def main_page():
 
 
 def main():
-    if "logged_in" not in st.session_state:
-        login()
-        st.stop()
-
     option = st.sidebar.radio(
         "options", ["Ver Dados", "Carregar Ficheiros"], label_visibility="collapsed"
     )
