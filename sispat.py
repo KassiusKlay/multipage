@@ -15,7 +15,12 @@ def get_stored_data():
 def process_df(df):
     df["exame"] = df.tipo_exame.mask(
         (df.tipo_exame.str.contains("citologia", case=False))
-        | (df.tipo_exame.str.contains("mielo", case=False)),
+        | (df.tipo_exame.str.contains("citológico", case=False))  # add
+        | (df.tipo_exame.str.contains("mielo", case=False))
+        | (df.tipo_exame.str.contains("cito-hist", case=False))   # add ROSE + ecoendoscopia
+        | (df.tipo_exame.str.contains("ROSE", case=False))        # add if needed
+        | (df.tipo_exame.str.contains("aspirativa", case=False))  # add punção aspirativa
+        | (df.tipo_exame.str.contains("citobloco", case=False)),  # add
         "Citologia",
     )
     df["exame"] = df.exame.mask(
