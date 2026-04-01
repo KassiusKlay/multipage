@@ -5,6 +5,7 @@ import bcrypt
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
+
 def check_credentials():
     """Check if provided credentials are valid against stored secrets."""
     if (
@@ -22,6 +23,7 @@ def check_credentials():
         st.rerun()
         return True
 
+
 def login():
     """Display the login form."""
     st.header("Login Required")
@@ -35,6 +37,7 @@ def login():
         if submitted:
             check_credentials()
 
+
 def logout():
     """Log out the user."""
     st.session_state.logged_in = False
@@ -42,10 +45,13 @@ def logout():
     st.session_state.password = ""
     st.rerun()
 
+
 # Define all pages
 nutrition = st.Page("nutrition.py", title="Nutrition", icon=":material/restaurant:")
 remnote = st.Page("remnote.py", title="Remnote", icon=":material/note_add:")
-swingvision = st.Page("swingvision.py", title="Swingvision", icon=":material/sports_tennis:")
+swingvision = st.Page(
+    "swingvision.py", title="Swingvision", icon=":material/sports_tennis:"
+)
 
 sispat = st.Page("sispat.py", title="Sispat", icon=":material/health_and_safety:")
 invoice = st.Page("invoice.py", title="Invoice", icon=":material/receipt:")
@@ -64,7 +70,9 @@ restricted_pages = [sispat, invoice, budget]
 deprecated_pages = [stock_drop, degiro]
 
 # Set page config
-st.set_page_config(page_title="Dashboard", page_icon=":material/dashboard:", layout="wide")
+st.set_page_config(
+    page_title="Dashboard", page_icon=":material/dashboard:", layout="wide"
+)
 
 # Always show full navigation structure
 page_dict = {"Free": free_pages}
@@ -77,7 +85,9 @@ if st.session_state.logged_in:
     page_dict["Restricted"] = restricted_pages
 else:
     # Show login page in Restricted section when not logged in
-    page_dict["Restricted"] = [st.Page(login, title="Login Required", icon=":material/login:")]
+    page_dict["Restricted"] = [
+        st.Page(login, title="Login Required", icon=":material/login:")
+    ]
 
 # Always show the full navigation
 pg = st.navigation(page_dict)

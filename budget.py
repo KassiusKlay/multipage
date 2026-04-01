@@ -245,6 +245,7 @@ def upload_files():
             "Dog",
             "Fun",
             "Health",
+            "House",
             "Ignore",
             "Income",
             "Insurance",
