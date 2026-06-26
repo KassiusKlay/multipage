@@ -588,6 +588,22 @@ def percentage_entidades(df):
     st.write(pd.DataFrame(percentages).head(10))
 
 
+def top_5_honorarios(df):
+    df = df.copy()
+    df["dia"] = df.expedido.dt.normalize()
+    daily = (
+        df.groupby("dia")
+        .agg(honorarios=("honorarios", "sum"), casos=("honorarios", "count"))
+        .reset_index()
+        .nlargest(5, "honorarios")
+    )
+    daily["honorarios"] = daily["honorarios"].round(2)
+    daily["média"] = (daily["honorarios"] / daily["casos"]).round(2)
+    daily.insert(0, "#", range(1, len(daily) + 1))
+    daily.columns = ["#", "Data", "Honorários", "Casos", "Média"]
+    st.dataframe(daily, hide_index=True, width="stretch")
+
+
 def main_page():
     df, sispat = get_stored_data()
     options = [
@@ -597,8 +613,9 @@ def main_page():
         "Timeline PVP por Entidade",
         "PVP por Biópsia",
         "Faturação",
+        "Top 5",
     ]
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(options)
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(options)
 
     with tab1:
         check_susana(df.copy(), sispat.copy())
@@ -612,6 +629,8 @@ def main_page():
         mean_pvp_biopsia(df.copy())
     with tab6:
         faturacao(df.copy(), sispat.copy())
+    with tab7:
+        top_5_honorarios(df.copy())
 
 
 def main():

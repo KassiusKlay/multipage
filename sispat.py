@@ -11,8 +11,8 @@ def get_stored_data():
     )
 
 
-@st.cache_data
-def process_df(df):
+def add_exame_column(df):
+    df = df.copy()
     df["exame"] = df.tipo_exame.mask(
         (df.tipo_exame.str.contains("citologia", case=False))
         | (df.tipo_exame.str.contains("citológico", case=False))  # add
@@ -26,6 +26,12 @@ def process_df(df):
     df["exame"] = df.exame.mask(
         ~df.exame.str.contains("citologia", case=False), "Histologia"
     )
+    return df
+
+
+@st.cache_data
+def process_df(df):
+    df = add_exame_column(df)
     df["tempo_de_resposta"] = (df.expedido - df.entrada).apply(lambda x: x.days)
 
     df = (
@@ -128,7 +134,7 @@ def plot_line(df, plot_selection):
     st.altair_chart(layer)
 
 
-def plot_bar(df, plot_selection):
+def plot_bar(df, plot_selection, raw_df=None):
     if "Tempo de Resposta" in plot_selection:
         df = df[
             ~df.tipo_exame.str.contains("Aditamento")
@@ -156,6 +162,72 @@ def plot_bar(df, plot_selection):
         sort = "x"
         text_format = ".1f"
         transform_filter = "datum.patologista != 'Dra. Helena Oliveira'"
+    elif "Maximo de Casos" in plot_selection:
+        patologista = "Total"
+        x_axis = "nr_exame:Q"
+        sort = "-x"
+        text_format = ".0f"
+        transform_filter = "datum.nr_exame > 10"
+
+        start_year, end_year = st.select_slider(
+            "options",
+            range(raw_df.expedido.min().year, raw_df.expedido.max().year + 1),
+            value=(raw_df.expedido.min().year, raw_df.expedido.max().year),
+            label_visibility="collapsed",
+        )
+
+        raw_df = raw_df[raw_df.expedido.dt.year.between(start_year, end_year)]
+        raw_df = raw_df.copy()
+        raw_df["dia"] = raw_df.expedido.dt.normalize()
+        daily = (
+            raw_df.groupby(["dia", "patologista"])
+            .size()
+            .reset_index(name="nr_exame")
+        )
+        df = daily.groupby("patologista")["nr_exame"].max().reset_index()
+        max_total = raw_df.groupby("dia").size().max()
+        df = pd.concat(
+            [
+                df,
+                pd.DataFrame({"patologista": [patologista], "nr_exame": [max_total]}),
+            ],
+            ignore_index=True,
+        )
+
+        bar = (
+            alt.Chart()
+            .mark_bar()
+            .encode(
+                x=alt.X(x_axis, axis=None),
+                y=alt.Y("patologista", sort=sort),
+                color=alt.condition(
+                    f"datum.patologista == '{patologista}'",
+                    alt.value("orange"),
+                    alt.value("steelblue"),
+                ),
+            )
+        )
+
+        text = (
+            alt.Chart()
+            .mark_text(align="left", dx=2)
+            .encode(
+                x=x_axis,
+                y=alt.Y("patologista", sort=sort),
+                text=alt.Text(x_axis, format=text_format),
+            )
+        )
+
+        chart = (
+            alt.layer(bar + text, data=df)
+            .configure_axis(grid=False, title="")
+            .configure_view(strokeWidth=0)
+            .properties(width=700)
+            .transform_filter(transform_filter)
+        )
+
+        st.altair_chart(chart)
+        return
     elif "Media de Casos" in plot_selection:
         aggregate = {"nr_exame": "sum"}
         patologista = "Total"
@@ -222,8 +294,9 @@ def plot_bar(df, plot_selection):
 
 
 def main_page():
-    df = get_stored_data()
-    df = process_df(df)
+    stored_df = get_stored_data()
+    df = process_df(stored_df)
+    raw_df = None
     lista_patologistas = df.patologista.sort_values().unique().tolist()
     lista_patologistas.insert(0, "Todos")
 
@@ -269,22 +342,34 @@ def main_page():
         )
         if filter_exame in ["Histologia", "Citologia"]:
             df = df[df.exame == filter_exame]
+            raw_df = add_exame_column(stored_df)
+            raw_df = raw_df[
+                ~raw_df.tipo_exame.str.contains("Aditamento")
+                & ~raw_df.tipo_exame.str.contains("Tipagem")
+                & ~raw_df.tipo_exame.str.contains("Aut")
+                & ~(raw_df.tipo_exame == "Caso de Consulta")
+            ]
+            raw_df = raw_df[raw_df.exame == filter_exame]
         else:
             df = df[["expedido", "patologista", "tipo_exame", "imuno"]]
             df.columns = ["expedido", "patologista", "tipo_exame", "nr_exame"]
         lista_graficos = ["Media de Casos por Mes"]
+        if filter_exame in ["Histologia", "Citologia"]:
+            lista_graficos.append("Maximo de Casos por Dia")
         if filter_exame != "Imuno":
             lista_graficos.insert(1, "Tempo de Resposta")
 
     excluir_hba = st.checkbox("Excluir HBA")
     if excluir_hba:
         df = df[~df.tipo_exame.str.contains("hba", case=False)]
+        if raw_df is not None:
+            raw_df = raw_df[~raw_df.tipo_exame.str.contains("hba", case=False)]
 
     plot_selection = st.radio(
         "options", lista_graficos, horizontal=True, label_visibility="collapsed"
     )
     if data_selection == "Comparativos":
-        plot_bar(df, plot_selection)
+        plot_bar(df, plot_selection, raw_df=raw_df)
     else:
         plot_line(df, plot_selection)
 
