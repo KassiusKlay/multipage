@@ -206,92 +206,202 @@ def process_tsv(file, file_type):
     return df.reset_index(drop=True)
 
 
-def insert_row_into_database(row, origin, category):
-    row["origin"] = origin
-    row["category"] = category
-    row_df = pd.DataFrame([row])
-    row_df.to_sql("budget", engine, if_exists="append", index=False)
-    st.session_state.current_row_index += 1
+FILE_TYPES = [
+    "Personal Debit",
+    "Personal Credit",
+    "Company Debit",
+    "Company Credit",
+]
+
+CATEGORY_OPTIONS = [
+    "Appliances",
+    "Car",
+    "Charity",
+    "Comissions",
+    "Dining",
+    "Dog",
+    "Fun",
+    "Health",
+    "House",
+    "Ignore",
+    "Income",
+    "Insurance",
+    "Investments",
+    "Job",
+    "Other",
+    "Rent",
+    "Salary",
+    "Sports",
+    "Taxes",
+    "Transportation",
+    "Travel",
+    "Utilities",
+]
+
+
+def origin_for_file_type(file_type):
+    return "Personal" if "Personal" in file_type else "Company"
+
+
+def build_category_lookup(stored_df):
+    if stored_df.empty:
+        return {}, {}
+
+    grouped = stored_df.groupby("description")["category"]
+    default_category = grouped.apply(
+        lambda values: values.mode().iloc[0] if not values.empty else "Other"
+    )
+    past_categories = grouped.apply(
+        lambda values: ", ".join(sorted(values.unique())) if values.nunique() > 1 else ""
+    )
+    return default_category.to_dict(), past_categories.to_dict()
+
+
+def prepare_new_rows(parsed_dfs, stored_df):
+    if not parsed_dfs:
+        return pd.DataFrame()
+
+    combined = pd.concat(parsed_dfs, ignore_index=True)
+    combined = combined.drop_duplicates(subset=["date", "description", "amount"])
+    new_data = find_unique_rows_in_df(
+        combined, stored_df[["date", "description", "amount"]]
+    )
+    if new_data.empty:
+        return new_data
+
+    default_category, past_categories = build_category_lookup(stored_df)
+    new_data = new_data.copy()
+    is_known = new_data["description"].isin(default_category)
+    new_data["category"] = new_data["description"].map(default_category)
+    new_data.loc[~is_known, "category"] = None
+    new_data["past_categories"] = new_data["description"].map(past_categories).fillna("")
+    new_data["status"] = "New"
+    new_data.loc[is_known, "status"] = "Known"
+    new_data.loc[new_data["past_categories"] != "", "status"] = "Review"
+
+    status_order = {"New": 0, "Review": 1, "Known": 2}
+    return (
+        new_data.assign(_sort=new_data["status"].map(status_order))
+        .sort_values(["_sort", "date", "description"])
+        .drop(columns="_sort")
+        .reset_index(drop=True)
+    )
+
+
+def missing_categories(rows_df):
+    category = rows_df["category"]
+    return category.isna() | category.astype(str).str.strip().eq("")
+
+
+def insert_rows_batch(rows_df):
+    if missing_categories(rows_df).any():
+        raise ValueError("All rows must have a category before upload.")
+
+    rows_df[["date", "description", "amount", "origin", "category"]].to_sql(
+        "budget", engine, if_exists="append", index=False
+    )
+    get_stored_data.clear()
+    st.session_state.pending_budget_rows = None
 
 
 def upload_files():
     st.title("Upload Files")
-    uploaded_file = st.file_uploader("Choose a file", type=["tsv", "xls", "xlsx"])
+    if "pending_budget_rows" not in st.session_state:
+        st.session_state.pending_budget_rows = None
 
-    if uploaded_file is not None:
-        file_type = st.selectbox(
-            "Select file type",
-            ["Personal Debit", "Personal Credit", "Company Debit", "Company Credit"],
+    uploaded_files = st.file_uploader(
+        "Choose files",
+        type=["tsv", "xls", "xlsx"],
+        accept_multiple_files=True,
+    )
+
+    if uploaded_files:
+        st.subheader("File types")
+        file_types = {}
+        for i, uploaded_file in enumerate(uploaded_files):
+            file_types[uploaded_file.name] = st.selectbox(
+                uploaded_file.name,
+                FILE_TYPES,
+                key=f"budget_file_type_{i}",
+            )
+
+        if st.button("Process files"):
+            parsed_dfs = []
+            for uploaded_file in uploaded_files:
+                file_type = file_types[uploaded_file.name]
+                df = process_tsv(uploaded_file, file_type)
+                df["origin"] = origin_for_file_type(file_type)
+                parsed_dfs.append(df)
+
+            stored_df = get_stored_data()
+            st.session_state.pending_budget_rows = prepare_new_rows(
+                parsed_dfs, stored_df
+            )
+
+    pending = st.session_state.get("pending_budget_rows")
+    if pending is not None and not pending.empty:
+        n_new = (pending["status"] == "New").sum()
+        st.subheader(f"New rows ({len(pending)})")
+        if n_new:
+            st.caption(f"{n_new} new description(s) at the top — category must be set before upload.")
+
+        display_cols = [
+            "status",
+            "date",
+            "description",
+            "amount",
+            "origin",
+            "category",
+            "past_categories",
+        ]
+        column_config = {
+            "status": st.column_config.TextColumn("Status", disabled=True),
+            "date": st.column_config.DatetimeColumn("Date", disabled=True),
+            "description": st.column_config.TextColumn("Description", disabled=True),
+            "amount": st.column_config.NumberColumn("Amount", format="%.2f", disabled=True),
+            "origin": st.column_config.TextColumn("Origin", disabled=True),
+            "category": st.column_config.SelectboxColumn(
+                "Category",
+                options=CATEGORY_OPTIONS,
+                required=False,
+            ),
+            "past_categories": st.column_config.TextColumn(
+                "Past categories",
+                disabled=True,
+                help="Shown when this description had multiple categories before.",
+            ),
+        }
+
+        edited = st.data_editor(
+            pending[display_cols],
+            column_config=column_config,
+            hide_index=True,
+            width="stretch",
+            key="budget_pending_editor",
         )
 
-        df = process_tsv(uploaded_file, file_type)
-        stored_df = get_stored_data()
-        new_data = find_unique_rows_in_df(
-            df, stored_df[["date", "description", "amount"]]
-        )
-        if "current_row_index" not in st.session_state:
-            st.session_state.current_row_index = 0
+        n_missing = missing_categories(edited).sum()
+        if n_missing:
+            st.warning(f"{n_missing} row(s) still need a category.")
 
-        origin_options = [
-            "Personal",
-            "Company",
-        ]
-        category_options = [
-            "Appliances",
-            "Car",
-            "Charity",
-            "Comissions",
-            "Dining",
-            "Dog",
-            "Fun",
-            "Health",
-            "House",
-            "Ignore",
-            "Income",
-            "Insurance",
-            "Investments",
-            "Job",
-            "Other",
-            "Rent",
-            "Salary",
-            "Sports",
-            "Taxes",
-            "Transportation",
-            "Travel",
-            "Utilities",
-        ]
+        if st.button("Confirm all", type="primary", disabled=n_missing > 0):
+            insert_rows_batch(edited)
+            st.success(f"{len(edited)} rows inserted.")
+            st.rerun()
 
-        if st.session_state.current_row_index < len(new_data):
-            row = new_data.iloc[st.session_state.current_row_index]
-            st.write(row.astype(str))
-            default_origin = "Personal" if "Personal" in file_type else "Company"
+        if st.button("Discard"):
+            st.session_state.pending_budget_rows = None
+            st.rerun()
 
-            default_category = "Other"
-            matching_rows = stored_df[stored_df["description"] == row["description"]]
-            if not matching_rows.empty:
-                default_category = matching_rows.iloc[0]["category"]
-
-            origin = st.selectbox(
-                "Select origin",
-                origin_options,
-                index=origin_options.index(default_origin),
-            )
-            category = st.selectbox(
-                "Select category",
-                category_options,
-                index=category_options.index(default_category),
-            )
-            st.button(
-                "Confirm",
-                on_click=insert_row_into_database,
-                args=[row, origin, category],
-            )
-        else:
-            st.write("All rows have been processed.")
-            st.cache_data.clear()
+    elif pending is not None and pending.empty:
+        st.info("No new rows — all transactions are already in the database.")
+        if st.button("Clear"):
+            st.session_state.pending_budget_rows = None
+            st.rerun()
+    elif uploaded_files and st.session_state.get("pending_budget_rows") is None:
+        st.caption("Select file types and click **Process files**.")
     else:
-        if "current_row_index" in st.session_state.keys():
-            del st.session_state.current_row_index
+        st.session_state.pop("pending_budget_rows", None)
 
 
 if __name__ == "__main__":
