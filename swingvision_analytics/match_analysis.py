@@ -8,6 +8,8 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
+from .data_processing import resolve_match_won, completed_matches
+
 HOST = "Joao Cassis"
 
 
@@ -26,11 +28,11 @@ def calculate_match_analytics(matches, points, shots):
         if len(match_points) == 0:
             continue
 
-        # Basic match outcome
+        # Basic match outcome (prefer official Sets; None if unfinished)
         total_points = len(match_points)
         points_won = len(match_points[match_points["point_winner"] == HOST])
         points_won_pct = points_won / total_points
-        match_won = points_won_pct > 0.5
+        match_won = resolve_match_won(match, points_won_pct)
 
         # === NET POINTS CALCULATION ===
         # Positive shots (points I create)
@@ -132,6 +134,9 @@ def calculate_match_analytics(matches, points, shots):
                 "opponent": match["guest_team"],
                 "location": match["location"],
                 "match_won": match_won,
+                "match_status": match.get("match_status", "completed"),
+                "is_completed": bool(match.get("is_completed", True)),
+                "scoreline": match.get("scoreline", ""),
                 "points_won_pct": points_won_pct,
                 # Net Points breakdown
                 "net_points": net_points,
@@ -171,7 +176,20 @@ def create_net_points_breakdown_chart(analytics_df):
     )
 
     # Top chart: Net Points line with win/loss colors
-    colors = ["green" if won else "red" for won in df_sorted["match_won"]]
+    colors = []
+    result_labels = []
+    for _, row in df_sorted.iterrows():
+        won = row.get("match_won")
+        status = row.get("match_status", "completed")
+        if won is True:
+            colors.append("green")
+            result_labels.append("WON")
+        elif won is False:
+            colors.append("red")
+            result_labels.append("LOST")
+        else:
+            colors.append("gray")
+            result_labels.append(str(status).upper())
 
     fig.add_trace(
         go.Scatter(
@@ -181,7 +199,7 @@ def create_net_points_breakdown_chart(analytics_df):
             name="Net Points",
             marker=dict(color=colors, size=12),
             hovertemplate="Date: %{x}<br>Net Points: %{y}<br>Result: %{customdata}<extra></extra>",
-            customdata=["WON" if won else "LOST" for won in df_sorted["match_won"]],
+            customdata=result_labels,
         ),
         row=1,
         col=1,
@@ -230,14 +248,14 @@ def create_net_points_breakdown_chart(analytics_df):
 
 
 def create_performance_comparison_dashboard(analytics_df):
-    """Create dashboard comparing won vs lost matches"""
+    """Create dashboard comparing won vs lost matches (completed only)."""
 
     if analytics_df.empty:
         return go.Figure()
 
-    # Calculate averages for won vs lost matches
-    won_matches = analytics_df[analytics_df["match_won"]]
-    lost_matches = analytics_df[~analytics_df["match_won"]]
+    completed = completed_matches(analytics_df)
+    won_matches = completed[completed["match_won"] == True]
+    lost_matches = completed[completed["match_won"] == False]
 
     metrics = [
         "net_points",
@@ -303,11 +321,19 @@ def render_match_analysis_tab(matches, points, shots):
         st.warning("No data available for analysis.")
         return
 
-    # Key insights at the top
+    # Key insights at the top (completed matches only for W/L)
     st.subheader("🏆 Key Performance Insights")
 
-    won_matches = analytics_df[analytics_df["match_won"]]
-    lost_matches = analytics_df[~analytics_df["match_won"]]
+    completed = completed_matches(analytics_df)
+    unfinished_n = len(analytics_df) - len(completed)
+    if unfinished_n:
+        st.caption(
+            f"{unfinished_n} incomplete match(es) excluded from win/loss comparisons "
+            f"(still included in Net Points chart)."
+        )
+
+    won_matches = completed[completed["match_won"] == True]
+    lost_matches = completed[completed["match_won"] == False]
 
     col1, col2, col3, col4 = st.columns(4)
 
@@ -396,14 +422,22 @@ def render_match_analysis_tab(matches, points, shots):
             display_df[col] = display_df[col].map("{:.1%}".format)
 
     # Add match result column
-    display_df["Result"] = display_df["match_won"].map(
-        {True: "✅ WON", False: "❌ LOST"}
-    )
+    def _result_label(row):
+        if row.get("match_won") is True:
+            return "✅ WON"
+        if row.get("match_won") is False:
+            return "❌ LOST"
+        status = row.get("match_status", "unfinished")
+        return f"⏸️ {str(status).upper()}"
+
+    display_df["Result"] = display_df.apply(_result_label, axis=1)
 
     # Reorder columns for better presentation
     column_order = [
         "match_date",
         "opponent",
+        "scoreline",
+        "match_status",
         "Result",
         "net_points",
         "positive_shots",

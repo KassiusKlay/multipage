@@ -14,17 +14,33 @@ def create_key_metrics_cards(match_metrics_df):
     if match_metrics_df.empty:
         return
 
-    # Calculate overall averages
+    completed = match_metrics_df
+    if "is_completed" in match_metrics_df.columns:
+        completed = match_metrics_df[match_metrics_df["is_completed"]]
+    elif "match_status" in match_metrics_df.columns:
+        completed = match_metrics_df[match_metrics_df["match_status"] == "completed"]
+
     avg_metrics = match_metrics_df.select_dtypes(include=["float64", "int64"]).mean()
 
-    # Create columns for metrics cards
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
+        if (
+            not completed.empty
+            and "match_won" in completed.columns
+            and completed["match_won"].notna().any()
+        ):
+            win_rate = completed["match_won"].dropna().mean()
+            label = f"Match Win Rate ({len(completed.dropna(subset=['match_won']))})"
+        else:
+            win_rate = avg_metrics.get("points_won_pct", 0)
+            label = "Points Won %"
+        unfinished = len(match_metrics_df) - len(completed)
         st.metric(
-            label="Overall Win Rate",
-            value=f"{avg_metrics.get('points_won_pct', 0):.1%}",
-            delta=None,
+            label=label,
+            value=f"{win_rate:.1%}",
+            delta=f"{unfinished} incomplete" if unfinished else None,
+            delta_color="off",
         )
 
     with col2:
@@ -231,19 +247,39 @@ def render_dashboard_tab(matches, points, shots, match_metrics_df):
         display_columns = [
             "match_date",
             "opponent",
+            "scoreline",
+            "match_status",
+            "match_won",
             "points_won_pct",
             "winners",
             "unforced_errors",
+            "blank_detail_total",
             "aces",
         ]
+        recent_view = recent_matches[
+            [c for c in display_columns if c in recent_matches.columns]
+        ].copy()
+        if "match_won" in recent_view.columns:
+            recent_view["match_won"] = recent_view.apply(
+                lambda r: (
+                    "W"
+                    if r["match_won"] is True
+                    else "L"
+                    if r["match_won"] is False
+                    else "—"
+                ),
+                axis=1,
+            )
         st.dataframe(
-            recent_matches[display_columns].style.format(
+            recent_view.style.format(
                 {
                     "points_won_pct": "{:.1%}",
                     "winners": "{:.0f}",
                     "unforced_errors": "{:.0f}",
                     "aces": "{:.0f}",
-                }
+                    "blank_detail_total": "{:.0f}",
+                },
+                na_rep="—",
             ),
-            width='stretch',
+            width="stretch",
         )

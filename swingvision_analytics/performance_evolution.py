@@ -18,13 +18,21 @@ def create_evolution_chart(match_metrics_df, metric):
 
     fig = go.Figure()
 
-    # Determine win/loss colors using points_won_pct > 0.5
-    if "points_won_pct" in df_sorted.columns:
+    # Prefer official match_won; unfinished = gray
+    if "match_won" in df_sorted.columns:
+        colors = []
+        for won in df_sorted["match_won"]:
+            if won is True:
+                colors.append("green")
+            elif won is False:
+                colors.append("red")
+            else:
+                colors.append("gray")
+    elif "points_won_pct" in df_sorted.columns:
         colors = [
             "green" if pct > 0.5 else "red" for pct in df_sorted["points_won_pct"]
         ]
     else:
-        # Fallback to blue if no win/loss data available
         colors = ["blue"] * len(df_sorted)
 
     fig.add_trace(
