@@ -9,6 +9,16 @@ def get_stored_data():
     return pd.read_sql("SELECT * FROM budget", engine, parse_dates=["date"])
 
 
+def get_category_options():
+    """Read current categories without caching edits made directly in the table."""
+    categories = pd.read_sql(
+        "SELECT DISTINCT category FROM budget WHERE category IS NOT NULL", engine
+    )["category"]
+    # Ignore blank labels but preserve the spelling and casing stored in the DB.
+    categories = categories[categories.str.strip().ne("")]
+    return sorted(categories.tolist(), key=str.casefold)
+
+
 def main():
     st.sidebar.title("Navigation")
     choice = st.sidebar.radio(
@@ -213,31 +223,6 @@ FILE_TYPES = [
     "Company Credit",
 ]
 
-CATEGORY_OPTIONS = [
-    "Appliances",
-    "Car",
-    "Charity",
-    "Comissions",
-    "Dining",
-    "Dog",
-    "Fun",
-    "Health",
-    "House",
-    "Ignore",
-    "Income",
-    "Insurance",
-    "Investments",
-    "Job",
-    "Other",
-    "Rent",
-    "Salary",
-    "Sports",
-    "Taxes",
-    "Transportation",
-    "Travel",
-    "Utilities",
-]
-
 
 def origin_for_file_type(file_type):
     return "Personal" if "Personal" in file_type else "Company"
@@ -247,10 +232,12 @@ def build_category_lookup(stored_df):
     if stored_df.empty:
         return {}, {}
 
+    stored_df = stored_df[~missing_categories(stored_df)]
+    if stored_df.empty:
+        return {}, {}
+
     grouped = stored_df.groupby("description")["category"]
-    default_category = grouped.apply(
-        lambda values: values.mode().iloc[0] if not values.empty else "Other"
-    )
+    default_category = grouped.apply(lambda values: values.mode().iloc[0])
     past_categories = grouped.apply(
         lambda values: ", ".join(sorted(values.unique())) if values.nunique() > 1 else ""
     )
@@ -293,9 +280,15 @@ def missing_categories(rows_df):
     return category.isna() | category.astype(str).str.strip().eq("")
 
 
+def invalid_categories(rows_df, category_options):
+    return ~missing_categories(rows_df) & ~rows_df["category"].isin(category_options)
+
+
 def insert_rows_batch(rows_df):
     if missing_categories(rows_df).any():
         raise ValueError("All rows must have a category before upload.")
+    if invalid_categories(rows_df, get_category_options()).any():
+        raise ValueError("Choose an existing category from the dropdown for every row.")
 
     rows_df[["date", "description", "amount", "origin", "category"]].to_sql(
         "budget", engine, if_exists="append", index=False
@@ -340,6 +333,13 @@ def upload_files():
 
     pending = st.session_state.get("pending_budget_rows")
     if pending is not None and not pending.empty:
+        category_options = get_category_options()
+        if not category_options:
+            st.warning(
+                "No categories exist in the budget table yet. "
+                "Add one there before uploading transactions."
+            )
+
         n_new = (pending["status"] == "New").sum()
         st.subheader(f"New rows ({len(pending)})")
         if n_new:
@@ -362,7 +362,8 @@ def upload_files():
             "origin": st.column_config.TextColumn("Origin", disabled=True),
             "category": st.column_config.SelectboxColumn(
                 "Category",
-                options=CATEGORY_OPTIONS,
+                options=category_options,
+                disabled=not category_options,
                 required=False,
             ),
             "past_categories": st.column_config.TextColumn(
@@ -384,10 +385,22 @@ def upload_files():
         if n_missing:
             st.warning(f"{n_missing} row(s) still need a category.")
 
-        if st.button("Confirm all", type="primary", disabled=n_missing > 0):
-            insert_rows_batch(edited)
-            st.success(f"{len(edited)} rows inserted.")
-            st.rerun()
+        n_invalid = invalid_categories(edited, category_options).sum()
+        if n_invalid:
+            st.warning(f"{n_invalid} row(s) need an existing category from the dropdown.")
+
+        if st.button(
+            "Confirm all",
+            type="primary",
+            disabled=n_missing > 0 or n_invalid > 0 or not category_options,
+        ):
+            try:
+                insert_rows_batch(edited)
+            except ValueError as error:
+                st.warning(str(error))
+            else:
+                st.success(f"{len(edited)} rows inserted.")
+                st.rerun()
 
         if st.button("Discard"):
             st.session_state.pending_budget_rows = None
