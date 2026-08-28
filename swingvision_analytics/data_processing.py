@@ -11,12 +11,15 @@ from sqlalchemy import text
 HOST = "Joao Cassis"
 
 STATUS_COMPLETED = "completed"
+STATUS_INCOMPLETE = "incomplete"
+# Legacy values still treated as incomplete
 STATUS_UNFINISHED = "unfinished"
 STATUS_TIME = "time"
 STATUS_RETIRED = "retired"
 STATUS_OTHER = "other"
 
 INCOMPLETE_STATUSES = {
+    STATUS_INCOMPLETE,
     STATUS_UNFINISHED,
     STATUS_TIME,
     STATUS_RETIRED,
@@ -25,9 +28,10 @@ INCOMPLETE_STATUSES = {
 
 STATUS_LABELS = {
     STATUS_COMPLETED: "completed",
-    STATUS_UNFINISHED: "unfinished",
-    STATUS_TIME: "stopped early",
-    STATUS_RETIRED: "retired",
+    STATUS_INCOMPLETE: "incomplete",
+    STATUS_UNFINISHED: "incomplete",
+    STATUS_TIME: "incomplete",
+    STATUS_RETIRED: "incomplete",
     STATUS_OTHER: "incomplete",
 }
 
@@ -72,7 +76,7 @@ def sets_needed_to_win(sets_per_match) -> int:
 
 def infer_match_status(match_id, sets: pd.DataFrame, sets_per_match=3) -> str:
     """
-    Auto-detect completed vs unfinished from the Sets sheet.
+    Auto-detect completed vs incomplete from the Sets sheet.
     SwingVision marks abandoned sets/games with set_winner='draw'.
     """
     if sets is None or sets.empty or "match_id" not in sets.columns:
@@ -84,21 +88,20 @@ def infer_match_status(match_id, sets: pd.DataFrame, sets_per_match=3) -> str:
 
     winners = match_sets["set_winner"].astype(str).str.lower().str.strip()
     if (winners == "draw").any():
-        return STATUS_UNFINISHED
+        return STATUS_INCOMPLETE
 
     host_sets = int((winners == "host").sum())
     guest_sets = int((winners == "guest").sum())
     need = sets_needed_to_win(sets_per_match)
     if max(host_sets, guest_sets) >= need:
         return STATUS_COMPLETED
-    # Sets exist but nobody reached the required set count
-    return STATUS_UNFINISHED
+    return STATUS_INCOMPLETE
 
 
 def is_completed_status(status) -> bool:
     if status is None or (isinstance(status, float) and pd.isna(status)):
         return True
-    return str(status) == STATUS_COMPLETED
+    return str(status) not in INCOMPLETE_STATUSES
 
 
 def match_won_from_sets(match_id, sets: pd.DataFrame):
@@ -412,6 +415,20 @@ def calculate_match_metrics(matches, points, shots):
             first_return_won_pct = second_return_won_pct = 0
             first_return_speed = second_return_speed = 0
 
+        # Groundstroke speeds excluding returns of serve
+        groundstrokes = my_shots[
+            my_shots["stroke"].isin(["Forehand", "Backhand"])
+            & ~my_shots["type"].isin(["first_return", "second_return"])
+        ]
+        fh_ground = groundstrokes[groundstrokes["stroke"] == "Forehand"]
+        bh_ground = groundstrokes[groundstrokes["stroke"] == "Backhand"]
+        forehand_avg_speed = (
+            fh_ground["speed"].mean() if len(fh_ground) > 0 else 0
+        )
+        backhand_avg_speed = (
+            bh_ground["speed"].mean() if len(bh_ground) > 0 else 0
+        )
+
         # === WINNERS AND ERRORS FROM DETAIL COLUMN ===
         my_winner_points = match_points[match_points["point_winner"] == HOST]
 
@@ -547,6 +564,8 @@ def calculate_match_metrics(matches, points, shots):
                 "second_return_won_pct": second_return_won_pct,
                 "second_return_speed": second_return_speed,
                 "return_games_won_pct": return_games_won_pct,
+                "forehand_avg_speed": forehand_avg_speed,
+                "backhand_avg_speed": backhand_avg_speed,
                 "winners": my_winners,
                 "forehand_winners": my_forehand_winners,
                 "backhand_winners": my_backhand_winners,

@@ -13,14 +13,8 @@ from db import engine
 
 from .data_processing import (
     STATUS_COMPLETED,
-    STATUS_LABELS,
-    STATUS_OTHER,
-    STATUS_RETIRED,
-    STATUS_TIME,
-    STATUS_UNFINISHED,
+    STATUS_INCOMPLETE,
     infer_match_status,
-    format_scoreline,
-    scoreline_from_sets,
 )
 from .schema import ensure_schema
 
@@ -120,7 +114,6 @@ def extract_match_metadata(settings_df, filename=None):
         start_time = pd.to_datetime(start_time_raw)
         end_time = None
         if "End Time" in settings_df.columns and pd.notna(settings_df.loc[0, "End Time"]):
-            # End Time is often time-only; keep as string time if date missing
             try:
                 end_time = pd.to_datetime(settings_df.loc[0, "End Time"])
             except Exception:
@@ -200,12 +193,10 @@ def validate_shots_export(shots_df, host, guest):
     guest_count = int(players.get(guest, 0))
     total = len(shots_df)
 
-    # Exact duplicate rows
     exact_dupes = int(shots_df.duplicated().sum())
     if exact_dupes > 0:
         messages.append(f"{exact_dupes} exact duplicate shot rows.")
 
-    # Dual-perspective: same point+shot+video_time, different players
     dual = 0
     if {"point", "shot", "video_time", "player"}.issubset(shots_df.columns):
         grouped = shots_df.groupby(["point", "shot", "video_time"])["player"].nunique()
@@ -215,7 +206,6 @@ def validate_shots_export(shots_df, host, guest):
                 f"{dual} dual-perspective events (same timestamp, both players labeled)."
             )
 
-    # Heavily skewed player counts suggest mirrored rows
     if host_count and guest_count:
         ratio = max(host_count, guest_count) / max(min(host_count, guest_count), 1)
         if ratio >= 1.8 and dual > 10:
@@ -224,62 +214,25 @@ def validate_shots_export(shots_df, host, guest):
             )
 
     if exact_dupes > 50 or dual > 30 or (
-        host_count and guest_count and max(host_count, guest_count) / total > 0.65 and dual > 10
+        host_count
+        and guest_count
+        and max(host_count, guest_count) / total > 0.65
+        and dual > 10
     ):
         messages.append(
-            "This export looks bugged (like a dual-perspective re-export). "
-            "Reprocess the video in SwingVision and upload again."
+            "Bugged export — reprocess in SwingVision and upload again."
         )
         return False, messages, "error"
 
     if exact_dupes or dual:
         return True, messages, "warn"
 
-    messages.append(
-        f"Shots look clean ({total} rows, {host_count} host / {guest_count} guest)."
-    )
-    return True, messages, "ok"
-
-
-def checksum_against_stats(points_df, stats_df, host_is_host=True):
-    """Compare a few derived point totals to the Stats sheet. Returns list of notes."""
-    notes = []
-    if stats_df is None or stats_df.empty or "Stat Name" not in stats_df.columns:
-        return notes
-
-    stats = stats_df.set_index("Stat Name")
-
-    def _stat_sum(name, role="Host"):
-        cols = [c for c in stats.columns if str(c).startswith(role)]
-        if name not in stats.index:
-            return None
-        vals = pd.to_numeric(stats.loc[name, cols], errors="coerce")
-        return float(vals.fillna(0).sum())
-
-    host_points_won = int((points_df["point_winner"] == "host").sum())
-    guest_points_won = int((points_df["point_winner"] == "guest").sum())
-    stats_host = _stat_sum("Total Points Won", "Host")
-    stats_guest = _stat_sum("Total Points Won", "Guest")
-
-    if stats_host is not None and abs(stats_host - host_points_won) > 1:
-        notes.append(
-            f"Checksum: Points sheet host won {host_points_won}, Stats says {int(stats_host)}."
-        )
-    if stats_guest is not None and abs(stats_guest - guest_points_won) > 1:
-        notes.append(
-            f"Checksum: Points sheet guest won {guest_points_won}, Stats says {int(stats_guest)}."
-        )
-
-    if not notes:
-        notes.append("Checksum: Points totals match Stats sheet.")
-    return notes
+    return True, [], "ok"
 
 
 def upload_files():
     ensure_schema()
-    existing_ids = get_stored_match_ids()
-    # Normalize UUID comparison (DB may return UUID or str)
-    existing_ids = {str(x) for x in existing_ids}
+    existing_ids = {str(x) for x in get_stored_match_ids()}
 
     uploaded_files = st.file_uploader(
         "Upload SwingVision Excel files", type="xlsx", accept_multiple_files=True
@@ -292,26 +245,27 @@ def upload_files():
     for i, file in enumerate(uploaded_files):
         progress_bar.progress((i + 1) / len(uploaded_files))
 
-        xls = pd.ExcelFile(file)
+        try:
+            xls = pd.ExcelFile(file)
+        except Exception as e:
+            st.error(f"⚠️ {file.name}: could not read file ({e})")
+            continue
+
         required = {"Settings", "Points", "Shots"}
         missing = required - set(xls.sheet_names)
         if missing:
-            st.error(f"{file.name}: missing sheets {sorted(missing)}")
+            st.error(f"⚠️ {file.name}: missing sheets {sorted(missing)}")
             continue
 
         settings = xls.parse("Settings")
         meta = extract_match_metadata(settings, file.name)
         if meta is None:
-            st.error(f"Failed to extract metadata from {file.name}")
+            st.error(f"⚠️ {file.name}: failed to read match metadata")
             continue
 
         match_id = meta["match_id"]
-        if st.checkbox("Show debug info", key=f"debug_{i}"):
-            st.write(meta)
-            st.write(f"**Already exists:** {str(match_id) in existing_ids}")
-
         if str(match_id) in existing_ids:
-            st.info(f"Match already uploaded: {file.name}")
+            st.info(f"Already uploaded: {file.name}")
             continue
 
         points_df = normalize_points(xls.parse("Points"))
@@ -320,32 +274,10 @@ def upload_files():
         ok, messages, severity = validate_shots_export(
             shots_df, meta["host"], meta["guest"]
         )
-        for msg in messages:
-            if severity == "error":
-                st.error(f"{file.name}: {msg}")
-            elif severity == "warn":
-                st.warning(f"{file.name}: {msg}")
-            else:
-                st.caption(f"{file.name}: {msg}")
-
-        force = False
-        if severity == "error":
-            force = st.checkbox(
-                f"Force upload anyway: {file.name}",
-                key=f"force_{i}",
-                value=False,
-            )
-            if not force:
-                st.warning(
-                    f"Skipped upload of {file.name} due to export quality issues."
-                )
-                continue
-
-        stats_notes = []
-        if "Stats" in xls.sheet_names:
-            stats_notes = checksum_against_stats(points_df, xls.parse("Stats"))
-            for note in stats_notes:
-                st.caption(f"{file.name}: {note}")
+        if severity == "error" or not ok:
+            detail = messages[0] if messages else "invalid shot data"
+            st.error(f"⚠️ {file.name}: {detail}")
+            continue
 
         sets_df = None
         if "Sets" in xls.sheet_names:
@@ -359,47 +291,11 @@ def upload_files():
             sets_df if sets_df is not None else pd.DataFrame(),
             meta.get("sets_per_match", 3),
         )
-        raw_score = scoreline_from_sets(
-            match_id, sets_df if sets_df is not None else pd.DataFrame()
+        match_status = (
+            STATUS_INCOMPLETE
+            if auto_status != STATUS_COMPLETED
+            else STATUS_COMPLETED
         )
-
-        match_status = STATUS_COMPLETED
-        if auto_status != STATUS_COMPLETED:
-            st.warning(
-                f"{file.name}: incomplete match detected — "
-                f"{format_scoreline(raw_score, auto_status)}"
-            )
-            reason = st.selectbox(
-                f"Why was this match incomplete? ({file.name})",
-                options=[
-                    STATUS_TIME,
-                    STATUS_RETIRED,
-                    STATUS_UNFINISHED,
-                    STATUS_OTHER,
-                ],
-                format_func=lambda s: {
-                    STATUS_TIME: "Ran out of time",
-                    STATUS_RETIRED: "Injury / retirement",
-                    STATUS_UNFINISHED: "Unfinished (other / unknown)",
-                    STATUS_OTHER: "Other",
-                }[s],
-                key=f"status_{i}",
-            )
-            st.caption(
-                "Points and shots will still be analyzed; this match won't count "
-                "as a win or loss."
-            )
-            if not st.button(
-                f"Confirm & upload incomplete match: {file.name}",
-                key=f"confirm_incomplete_{i}",
-            ):
-                st.info("Select a reason, then confirm to upload.")
-                continue
-            match_status = reason
-        else:
-            st.caption(
-                f"{file.name}: completed — {raw_score or 'score from Sets sheet'}"
-            )
 
         points_df["match_id"] = match_id
         shots_df["match_id"] = match_id
@@ -423,18 +319,27 @@ def upload_files():
             ]
         )
 
-        match_row.to_sql(
-            "swingvision_matches", engine, if_exists="append", index=False
-        )
-        points_df.to_sql("swingvision_points", engine, if_exists="append", index=False)
-        shots_df.to_sql("swingvision_shots", engine, if_exists="append", index=False)
-        if sets_df is not None and not sets_df.empty:
-            sets_df.to_sql(
-                "swingvision_sets", engine, if_exists="append", index=False
+        try:
+            match_row.to_sql(
+                "swingvision_matches", engine, if_exists="append", index=False
             )
+            points_df.to_sql(
+                "swingvision_points", engine, if_exists="append", index=False
+            )
+            shots_df.to_sql(
+                "swingvision_shots", engine, if_exists="append", index=False
+            )
+            if sets_df is not None and not sets_df.empty:
+                sets_df.to_sql(
+                    "swingvision_sets", engine, if_exists="append", index=False
+                )
+        except Exception as e:
+            st.error(f"⚠️ {file.name}: database error ({e})")
+            continue
 
         existing_ids.add(str(match_id))
-        st.success(f"Uploaded match: {file.name}")
+        suffix = " (incomplete)" if match_status == STATUS_INCOMPLETE else ""
+        st.success(f"Uploaded: {file.name}{suffix}")
 
     st.cache_data.clear()
 
@@ -442,14 +347,5 @@ def upload_files():
 def render_upload_files_tab():
     """Render the upload files tab"""
     st.title("📤 Upload SwingVision Files")
-    st.markdown(
-        """
-Uploads **Settings** (incl. format flags), **Points**, **Shots**, and **Sets**.
-Exports with duplicated / dual-perspective shot rows are rejected with a warning
-so they don't skew stroke analysis.
-
-Incomplete matches (time / injury / abandoned) are kept for coaching stats but
-excluded from win/loss.
-"""
-    )
+    st.caption("Bugged exports are skipped. Incomplete matches are kept but excluded from win/loss.")
     upload_files()

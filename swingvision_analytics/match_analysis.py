@@ -6,7 +6,6 @@ Contains functions for analyzing match-level performance metrics
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 from .data_processing import resolve_match_won, completed_matches
 
@@ -159,23 +158,13 @@ def calculate_match_analytics(matches, points, shots):
 
 
 def create_net_points_breakdown_chart(analytics_df):
-    """Create a detailed Net Points breakdown chart"""
+    """Net Points over time (single chart)."""
 
     if analytics_df.empty:
         return go.Figure()
 
-    # Sort by date
     df_sorted = analytics_df.sort_values("match_date")
 
-    fig = make_subplots(
-        rows=2,
-        cols=1,
-        subplot_titles=("Net Points by Match", "Net Points Components"),
-        specs=[[{"secondary_y": False}], [{"secondary_y": False}]],
-        vertical_spacing=0.15,
-    )
-
-    # Top chart: Net Points line with win/loss colors
     colors = []
     result_labels = []
     for _, row in df_sorted.iterrows():
@@ -191,6 +180,7 @@ def create_net_points_breakdown_chart(analytics_df):
             colors.append("gray")
             result_labels.append(str(status).upper())
 
+    fig = go.Figure()
     fig.add_trace(
         go.Scatter(
             x=df_sorted["match_date"],
@@ -200,50 +190,16 @@ def create_net_points_breakdown_chart(analytics_df):
             marker=dict(color=colors, size=12),
             hovertemplate="Date: %{x}<br>Net Points: %{y}<br>Result: %{customdata}<extra></extra>",
             customdata=result_labels,
-        ),
-        row=1,
-        col=1,
+        )
     )
-
-    # Add horizontal line at 0
-    fig.add_hline(y=0, line_dash="dash", line_color="gray", row=1, col=1)
-
-    # Bottom chart: Stacked bar showing positive vs negative shots
-    fig.add_trace(
-        go.Bar(
-            x=df_sorted["match_date"],
-            y=df_sorted["positive_shots"],
-            name="Positive Shots",
-            hovertemplate="Positive: %{y}<extra></extra>",
-        ),
-        row=2,
-        col=1,
-    )
-
-    fig.add_trace(
-        go.Bar(
-            x=df_sorted["match_date"],
-            y=-df_sorted["negative_shots"],  # Negative for visual effect
-            name="Negative Shots",
-            hovertemplate="Negative: %{y}<extra></extra>",
-        ),
-        row=2,
-        col=1,
-    )
-
-    # Add horizontal line at 0 for bottom chart
-    fig.add_hline(y=0, line_dash="dash", line_color="gray", row=2, col=1)
-
+    fig.add_hline(y=0, line_dash="dash", line_color="gray")
     fig.update_layout(
-        height=700,
-        title_text="Net Points Analysis - Your Shot Impact Over Time",
-        showlegend=True,
+        height=420,
+        title_text="Net Points by Match",
+        xaxis_title="Match Date",
+        yaxis_title="Net Points",
+        showlegend=False,
     )
-
-    fig.update_xaxes(title_text="Match Date", row=2, col=1)
-    fig.update_yaxes(title_text="Net Points", row=1, col=1)
-    fig.update_yaxes(title_text="Shots Count", row=2, col=1)
-
     return fig
 
 

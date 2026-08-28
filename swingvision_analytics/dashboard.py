@@ -178,108 +178,12 @@ def create_performance_dashboard(match_metrics_df):
     return fig
 
 
-def create_match_comparison_chart(match_metrics_df):
-    """Create a chart comparing performance across different opponents"""
-    if match_metrics_df.empty:
-        return go.Figure()
-
-    # Group by opponent and calculate averages
-    opponent_stats = (
-        match_metrics_df.groupby("opponent")
-        .agg(
-            {
-                "points_won_pct": "mean",
-                "first_serve_pct": "mean",
-                "winners": "mean",
-                "unforced_errors": "mean",
-                "break_points_won_pct": "mean",
-            }
-        )
-        .reset_index()
-    )
-
-    fig = go.Figure()
-
-    # Add traces for different metrics - let Streamlit theme handle colors
-    fig.add_trace(
-        go.Scatter(
-            x=opponent_stats["opponent"],
-            y=opponent_stats["points_won_pct"] * 100,
-            mode="markers+lines",
-            name="Points Won %",
-            marker=dict(size=12),
-            line=dict(width=3),
-            hovertemplate="<b>%{x}</b><br>Points Won: %{y:.1f}%<extra></extra>",
-        )
-    )
-
-    fig.update_layout(
-        title="Performance vs Different Opponents",
-        xaxis_title="Opponent",
-        yaxis_title="Points Won %",
-        height=400,
-    )
-
-    return fig
-
-
 def render_dashboard_tab(matches, points, shots, match_metrics_df):
     """Render the main dashboard tab"""
     st.header("Performance Dashboard")
 
-    # Key metrics cards
     create_key_metrics_cards(match_metrics_df)
 
-    # Performance dashboard
     dashboard_fig = create_performance_dashboard(match_metrics_df)
-    st.plotly_chart(dashboard_fig, width='stretch', theme="streamlit")
+    st.plotly_chart(dashboard_fig, width="stretch", theme="streamlit")
 
-    # Match comparison
-    comparison_fig = create_match_comparison_chart(match_metrics_df)
-    st.plotly_chart(comparison_fig, width='stretch', theme="streamlit")
-
-    # Recent matches summary
-    st.subheader("Recent Matches")
-    if not match_metrics_df.empty:
-        recent_matches = match_metrics_df.sort_values(
-            "match_date", ascending=False
-        ).head(5)
-        display_columns = [
-            "match_date",
-            "opponent",
-            "scoreline",
-            "match_status",
-            "match_won",
-            "points_won_pct",
-            "winners",
-            "unforced_errors",
-            "blank_detail_total",
-            "aces",
-        ]
-        recent_view = recent_matches[
-            [c for c in display_columns if c in recent_matches.columns]
-        ].copy()
-        if "match_won" in recent_view.columns:
-            recent_view["match_won"] = recent_view.apply(
-                lambda r: (
-                    "W"
-                    if r["match_won"] is True
-                    else "L"
-                    if r["match_won"] is False
-                    else "—"
-                ),
-                axis=1,
-            )
-        st.dataframe(
-            recent_view.style.format(
-                {
-                    "points_won_pct": "{:.1%}",
-                    "winners": "{:.0f}",
-                    "unforced_errors": "{:.0f}",
-                    "aces": "{:.0f}",
-                    "blank_detail_total": "{:.0f}",
-                },
-                na_rep="—",
-            ),
-            width="stretch",
-        )

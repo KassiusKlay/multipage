@@ -3,10 +3,16 @@ Shot Analysis module for SwingVision analytics
 Contains functions for analyzing shot patterns, strengths, and weaknesses
 """
 
-import streamlit as st
+import numpy as np
 import pandas as pd
+import plotly.graph_objects as go
+import streamlit as st
 
 HOST = "Joao Cassis"
+COURT_LENGTH = 23.77
+COURT_WIDTH = 8.23
+HALF_LENGTH = COURT_LENGTH / 2
+SERVICE_LINE_FROM_NET = 6.40
 
 
 @st.cache_data
@@ -350,11 +356,167 @@ def analyze_court_zone_success(shots, points):
     return df
 
 
+def _normalize_hit_coords(df: pd.DataFrame) -> pd.DataFrame:
+    """Flip far-side contacts onto the near half for a stable court view."""
+    out = df.copy()
+    far = out["hit_y"] > HALF_LENGTH
+    out.loc[far, "hit_x"] = -out.loc[far, "hit_x"]
+    out.loc[far, "hit_y"] = COURT_LENGTH - out.loc[far, "hit_y"]
+    return out
+
+
+@st.cache_data
+def build_error_heatmap(shots, stroke: str):
+    """
+    Grid of error rate (%) by contact location for a stroke.
+    Returns (fig, zone_table) or (None, empty df).
+    """
+    my = shots[
+        (shots["player"] == HOST)
+        & (shots["stroke"] == stroke)
+        & (~shots["type"].astype(str).isin(["first_return", "second_return"]))
+        & shots["hit_x"].notna()
+        & shots["hit_y"].notna()
+    ].copy()
+    if my.empty:
+        return None, pd.DataFrame()
+
+    my = _normalize_hit_coords(my)
+
+    x_edges = np.linspace(-5.5, 5.5, 7)
+    y_edges = np.linspace(-2.0, 10.0, 7)
+
+    total_h, _, _ = np.histogram2d(my["hit_x"], my["hit_y"], bins=[x_edges, y_edges])
+    err = my[my["result"].isin(["Out", "Net"])]
+    err_h, _, _ = np.histogram2d(err["hit_x"], err["hit_y"], bins=[x_edges, y_edges])
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        rate = np.where(total_h > 0, err_h / total_h * 100.0, np.nan)
+
+    z = rate.T
+    counts = total_h.T
+    err_counts = err_h.T
+    x_centers = (x_edges[:-1] + x_edges[1:]) / 2
+    y_centers = (y_edges[:-1] + y_edges[1:]) / 2
+
+    text = []
+    custom = []
+    for yi in range(z.shape[0]):
+        row_t = []
+        row_c = []
+        for xi in range(z.shape[1]):
+            n = counts[yi, xi]
+            e = err_counts[yi, xi]
+            if n <= 0 or np.isnan(z[yi, xi]):
+                row_t.append("")
+                row_c.append("n=0")
+            else:
+                row_t.append(f"{z[yi, xi]:.0f}%")
+                row_c.append(f"errors {int(e)} / {int(n)}")
+        text.append(row_t)
+        custom.append(row_c)
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Heatmap(
+            x=x_centers,
+            y=y_centers,
+            z=z,
+            text=text,
+            texttemplate="%{text}",
+            customdata=custom,
+            hovertemplate="Error rate: %{z:.0f}%<br>%{customdata}<extra></extra>",
+            colorscale="YlOrRd",
+            colorbar=dict(title="Error %"),
+            zmin=0,
+            zmax=100,
+            xgap=1,
+            ygap=1,
+        )
+    )
+
+    half_w = COURT_WIDTH / 2
+    shapes = [
+        dict(
+            type="rect",
+            x0=-half_w,
+            x1=half_w,
+            y0=0,
+            y1=HALF_LENGTH,
+            line=dict(color="white", width=2),
+            fillcolor="rgba(0,0,0,0)",
+        ),
+        dict(
+            type="line",
+            x0=-half_w,
+            x1=half_w,
+            y0=HALF_LENGTH - SERVICE_LINE_FROM_NET,
+            y1=HALF_LENGTH - SERVICE_LINE_FROM_NET,
+            line=dict(color="white", width=1.5),
+        ),
+        dict(
+            type="line",
+            x0=0,
+            x1=0,
+            y0=HALF_LENGTH - SERVICE_LINE_FROM_NET,
+            y1=HALF_LENGTH,
+            line=dict(color="white", width=1),
+        ),
+        dict(
+            type="line",
+            x0=-half_w - 0.5,
+            x1=half_w + 0.5,
+            y0=HALF_LENGTH,
+            y1=HALF_LENGTH,
+            line=dict(color="white", width=3),
+        ),
+    ]
+    fig.update_layout(
+        title=f"{stroke} error rate by contact location",
+        shapes=shapes,
+        xaxis=dict(
+            title="← Ad (left)     Court width (m)     Deuce (right) →",
+            range=[-5.5, 5.5],
+            scaleanchor="y",
+            scaleratio=1,
+            zeroline=False,
+        ),
+        yaxis=dict(
+            title="Baseline → Net (m)",
+            range=[-2.0, 10.5],
+            zeroline=False,
+        ),
+        height=560,
+        plot_bgcolor="#2e7d32",
+        paper_bgcolor="rgba(0,0,0,0)",
+    )
+
+    zone_rows = []
+    my = my.copy()
+    my["zone"] = my.apply(lambda r: get_court_zone(r["hit_x"], r["hit_y"]), axis=1)
+    for zone, g in my.groupby("zone"):
+        n = len(g)
+        e = len(g[g["result"].isin(["Out", "Net"])])
+        zone_rows.append(
+            {
+                "Zone": zone,
+                "Shots": n,
+                "Errors": e,
+                "Error %": e / n if n else 0,
+                "Share of errors": e / max(len(err), 1),
+            }
+        )
+    zone_df = pd.DataFrame(zone_rows)
+    if not zone_df.empty:
+        zone_df = zone_df.sort_values("Error %", ascending=False)
+
+    return fig, zone_df
+
+
 def render_shot_analysis_tab(matches, points, shots):
     """Main function for the Shot Analysis tab"""
     st.header("🎾 Shot Analysis - Strengths and Weaknesses")
 
-    # Shot Analysis Section
     st.subheader("Shot Effectiveness")
     col1, col2 = st.columns(2)
 
@@ -370,7 +532,7 @@ def render_shot_analysis_tab(matches, points, shots):
                         "error_pct": "{:.1%}",
                     }
                 ),
-                width='stretch',
+                width="stretch",
             )
 
     with col2:
@@ -386,10 +548,40 @@ def render_shot_analysis_tab(matches, points, shots):
                         "opp_win_count": "{:.0f}",
                     }
                 ),
-                width='stretch',
+                width="stretch",
             )
 
-    # Error vs Success Analysis
+    st.subheader("🔥 Error location heat map")
+    stroke_options = sorted(
+        s
+        for s in shots.loc[shots["player"] == HOST, "stroke"].dropna().unique()
+        if s not in ("Feed", "Serve")
+    )
+    if not stroke_options:
+        st.info("No strokes available for heat map.")
+    else:
+        default_idx = (
+            stroke_options.index("Forehand") if "Forehand" in stroke_options else 0
+        )
+        stroke = st.selectbox("Stroke", stroke_options, index=default_idx)
+        fig, zone_df = build_error_heatmap(shots, stroke)
+        if fig is None:
+            st.info(f"Not enough {stroke} location data for a heat map.")
+        else:
+            st.caption(
+                "Contact positions flipped onto your end. Cell % = errors / shots "
+                "from that area (returns of serve excluded)."
+            )
+            st.plotly_chart(fig, width="stretch", theme="streamlit")
+            if not zone_df.empty:
+                st.dataframe(
+                    zone_df.style.format(
+                        {"Error %": "{:.0%}", "Share of errors": "{:.0%}"}
+                    ),
+                    width="stretch",
+                    hide_index=True,
+                )
+
     st.subheader("🔍 Error vs Success Pattern Analysis")
     comparison_df = compare_error_vs_success_factors(shots)
     if not comparison_df.empty:
