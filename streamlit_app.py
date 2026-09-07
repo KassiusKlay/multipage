@@ -56,6 +56,7 @@ swingvision = st.Page(
 sispat = st.Page("sispat.py", title="Sispat", icon=":material/health_and_safety:")
 invoice = st.Page("invoice.py", title="Invoice", icon=":material/receipt:")
 budget = st.Page("budget.py", title="Budget", icon=":material/wallet:")
+r4c = st.Page("r4c.py", title="r4c", icon=":material/biotech:")
 
 stock_drop = st.Page("stock_drop.py", title="Stock Drop", icon=":material/inventory:")
 degiro = st.Page("degiro.py", title="Degiro", icon=":material/account_balance_wallet:")
@@ -64,7 +65,7 @@ degiro = st.Page("degiro.py", title="Degiro", icon=":material/account_balance_wa
 free_pages = [nutrition, remnote, swingvision]
 
 # Restricted pages (only available when logged in)
-restricted_pages = [sispat, invoice, budget]
+restricted_pages = [sispat, invoice, budget, r4c]
 
 # Deprecated pages (always available)
 deprecated_pages = [stock_drop, degiro]
